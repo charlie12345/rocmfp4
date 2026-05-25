@@ -1,3 +1,10 @@
+diff --git a/.github/FUNDING.yml b/.github/FUNDING.yml
+new file mode 100644
+index 000000000..2239696db
+--- /dev/null
++++ b/.github/FUNDING.yml
+@@ -0,0 +1 @@
++github: [charlie12345]
 diff --git a/.gitignore b/.gitignore
 index 5f53fbf7a..6b309dee3 100644
 --- a/.gitignore
@@ -830,7 +837,7 @@ index eac878960..2b8436ab3 100644
  
  static ggml_type kv_cache_type_from_str(const std::string & s) {
 diff --git a/common/speculative.cpp b/common/speculative.cpp
-index 3488b9393..3d6a7345c 100644
+index 3488b9393..368b7e3b8 100644
 --- a/common/speculative.cpp
 +++ b/common/speculative.cpp
 @@ -150,12 +150,26 @@ struct common_speculative_impl {
@@ -960,7 +967,19 @@ index 3488b9393..3d6a7345c 100644
  
      common_speculative_state_draft_mtp(const common_params_speculative & params, uint32_t n_seq)
          : common_speculative_impl(COMMON_SPECULATIVE_TYPE_DRAFT_MTP, n_seq)
-@@ -438,9 +462,13 @@ struct common_speculative_state_draft_mtp : public common_speculative_impl {
+@@ -424,7 +448,10 @@ struct common_speculative_state_draft_mtp : public common_speculative_impl {
+         for (auto & s : smpls) {
+             common_params_sampling sparams;
+             sparams.no_perf  = false;
+-            sparams.top_k    = 1; // TODO: re-enable top_k == 10 and utilize `p_min` spec param
++            // Keep several candidates so --spec-draft-p-min has a meaningful
++            // probability distribution while the draft loop still selects the
++            // top candidate after sorting below.
++            sparams.top_k    = 10;
+             sparams.samplers = { COMMON_SAMPLER_TYPE_TOP_K };
+             s.reset(common_sampler_init(llama_get_model(ctx_dft), sparams));
+         }
+@@ -438,9 +465,13 @@ struct common_speculative_state_draft_mtp : public common_speculative_impl {
          i_batch_end.assign(n_seq, -1);
  
          verify_h.assign(n_seq, {});
@@ -974,7 +993,7 @@ index 3488b9393..3d6a7345c 100644
      }
  
      ~common_speculative_state_draft_mtp() override {
-@@ -479,20 +507,22 @@ struct common_speculative_state_draft_mtp : public common_speculative_impl {
+@@ -479,20 +510,22 @@ struct common_speculative_state_draft_mtp : public common_speculative_impl {
  
          const int32_t n_tokens = batch_in.n_tokens;
  
@@ -1006,7 +1025,7 @@ index 3488b9393..3d6a7345c 100644
              }
          }
  
-@@ -504,7 +534,7 @@ struct common_speculative_state_draft_mtp : public common_speculative_impl {
+@@ -504,7 +537,7 @@ struct common_speculative_state_draft_mtp : public common_speculative_impl {
          common_batch_clear(batch);
  
          for (int k = 0; k < n_tokens; ++k) {
@@ -1015,7 +1034,7 @@ index 3488b9393..3d6a7345c 100644
          }
  
          // shift the tgt embeddings to the right by one position
-@@ -545,22 +575,32 @@ struct common_speculative_state_draft_mtp : public common_speculative_impl {
+@@ -545,22 +578,32 @@ struct common_speculative_state_draft_mtp : public common_speculative_impl {
              return false;
          }
  
@@ -1055,7 +1074,7 @@ index 3488b9393..3d6a7345c 100644
          }
  
          return true;
-@@ -573,7 +613,7 @@ struct common_speculative_state_draft_mtp : public common_speculative_impl {
+@@ -573,7 +616,7 @@ struct common_speculative_state_draft_mtp : public common_speculative_impl {
  
          // keep track of which sequences are still drafting
          int n_drafting = 0;
@@ -1064,7 +1083,7 @@ index 3488b9393..3d6a7345c 100644
  
          const float * h_row = nullptr;
          const size_t row_bytes = (size_t) n_embd * sizeof(float);
-@@ -585,16 +625,22 @@ struct common_speculative_state_draft_mtp : public common_speculative_impl {
+@@ -585,16 +628,22 @@ struct common_speculative_state_draft_mtp : public common_speculative_impl {
                  continue;
              }
  
@@ -1089,7 +1108,7 @@ index 3488b9393..3d6a7345c 100644
          int ret = llama_decode(ctx_dft, batch);
          if (ret != 0) {
              LOG_WRN("%s: llama_decode returned %d\n", __func__, ret);
-@@ -602,6 +648,7 @@ struct common_speculative_state_draft_mtp : public common_speculative_impl {
+@@ -602,6 +651,7 @@ struct common_speculative_state_draft_mtp : public common_speculative_impl {
          }
  
          int i = 0;
@@ -1097,7 +1116,7 @@ index 3488b9393..3d6a7345c 100644
  
          while (n_drafting > 0) {
              int i_batch = 0;
-@@ -621,29 +668,37 @@ struct common_speculative_state_draft_mtp : public common_speculative_impl {
+@@ -621,29 +671,37 @@ struct common_speculative_state_draft_mtp : public common_speculative_impl {
  
                  const auto * cur_p = common_sampler_get_candidates(smpl, true);
  
@@ -1142,7 +1161,7 @@ index 3488b9393..3d6a7345c 100644
                  std::memcpy(batch.embd + n_embd*(batch.n_tokens - 1), h_row, row_bytes);
              }
  
-@@ -682,12 +737,16 @@ struct common_speculative_state_draft_mtp : public common_speculative_impl {
+@@ -682,12 +740,16 @@ struct common_speculative_state_draft_mtp : public common_speculative_impl {
  
          const int32_t n_rows = verify_h_rows[seq_id];
          if (n_rows <= 0) {
@@ -1163,10 +1182,10 @@ index 3488b9393..3d6a7345c 100644
      bool need_embd() const override {
 diff --git a/docs/ROCmFP4-MTP-COMPARISON.md b/docs/ROCmFP4-MTP-COMPARISON.md
 new file mode 100644
-index 000000000..a12047003
+index 000000000..7eb94cd3c
 --- /dev/null
 +++ b/docs/ROCmFP4-MTP-COMPARISON.md
-@@ -0,0 +1,907 @@
+@@ -0,0 +1,915 @@
 +# ROCmFP4 + MTP Comparison
 +
 +Date: 2026-05-23
@@ -1301,9 +1320,10 @@ index 000000000..a12047003
 +scripts/check-rocmfp4-qwen35-a3b-mtp-regression.sh
 +```
 +
-+The focused guard now defaults to `n-max 3`, q8 main KV, and q4 draft KV. The
-+promoted sweep pass measured `104.3 tok/s` short and `89.3 tok/s` sustained;
-+guard floors are `100.0` and `85.0 tok/s`.
++The focused guard now defaults to `n-max 3`, q8 main KV, q4 draft KV, and
++`--spec-draft-p-min 0.25`. The promoted top-k-10 MTP sampler pass measured
++`103.9 tok/s` short and `90.0 tok/s` sustained after a first sustained run at
++`89.8 tok/s`; guard floors are `100.0` and `85.0 tok/s`.
 +
 +Follow-up acceptance-threshold checks on the q4-KV `n-max 2` profile did not
 +produce a clear sustained improvement, so the promoted server/guard defaults
@@ -1336,13 +1356,19 @@ index 000000000..a12047003
 +| 5 | q8 K/V | q4 K/V | none | 104.9 | 78.9 | slower burst than n-max 4 |
 +
 +Additional p-min filtering on the promoted `n-max 3`, q8-main/q4-draft
-+profile also failed to produce a clear sustained win. The remaining p-split
-+and n-min acceptance-shape checks were then closed on the same promoted
-+profile and also did not beat the default:
++profile originally failed to produce a clear sustained win while the MTP
++internal sampler was still hardcoded to `top_k=1`. After changing the internal
++MTP sampler to `top_k=10`, the draft loop still selects the top sorted
++candidate, but `--spec-draft-p-min` sees a meaningful candidate distribution.
++That makes `p-min 0.25` a promoted 35B A3B sustained profile. The dense 27B
++profile remains at `p-min 0.0`; the same `p-min 0.25` filter regressed 27B
++sustained decode to `24.6 tok/s`.
 +
 +| Extra setting | Short decode tok/s | Sustained decode tok/s | Result |
 +|---|---:|---:|---|
-+| `--spec-draft-p-min 0.25` | 104.2 | 89.1 | near tie, not promoted |
++| `top_k=10` internal MTP, `--spec-draft-p-min 0.0` | 104.3 | 89.3 | tied previous promoted path |
++| `top_k=10` internal MTP, `--spec-draft-p-min 0.25` | 103.9 | 90.0 | promoted sustained profile |
++| pre-change `--spec-draft-p-min 0.25` | 104.2 | 89.1 | near tie, not promoted |
 +| `--spec-draft-p-min 0.50` | 104.1 | 89.0 | slower sustained |
 +| `--spec-draft-p-min 0.75` | 104.0 | 89.3 | tied sustained but slower short decode |
 +| `--spec-draft-p-min 0.90` | 104.2 | 89.1 | near tie, not promoted |
@@ -1435,6 +1461,7 @@ index 000000000..a12047003
 +| ROCmFP4 HIP unaligned quant-byte dword load | promoted after the full gate; the isolated step measured `78.26` / `69.23` us for 64d dual-scale / FAST and `215.82` / `183.77` us for Qwen-style 128d dual-scale / FAST, while Qwen MTP held `33.4 tok/s` short and `27.7 tok/s` sustained |
 +| ROCmFP4 FAST MMVQ/MMQ packed-byte dword load | extended the ROCmFP4 unaligned packed-byte loader to FAST `MUL_MAT`; focused ROCm FAST moved to `45.17`, `58.38`, `90.54`, and `157.83` us for `n=1/2/4/8`, and Qwen MTP improved to `33.6 tok/s` short / `28.0 tok/s` sustained on the promoted default build |
 +| MMVQ single-warp reduction bypass | skips the shared-memory reduction storage, barrier, and dead `threadIdx.y > 0` return path when a ROCmFP4 MMVQ specialization launches with one warp; focused ROCm `n=4/8` improved to FAST `87.29` / `156.52` us and dual-scale `82.81` / `141.99` us, while Qwen MTP reached `34.1 tok/s` short / `28.1 tok/s` sustained |
++| MTP sampler top-k-10 acceptance filtering | lets `--spec-draft-p-min` operate on a real top-candidate distribution while still drafting the top sorted candidate; the 35B A3B profile with q8 main KV and q4 draft KV moved from the `89.3`-`89.5 tok/s` sustained band to `90.0 tok/s` with `--spec-draft-p-min 0.25` |
 +| ROCmFP4 CPY/dequant kernels | quant-to-F32 copies moved from the old `~740 us` band to about `182 us` dual-scale and `170 us` FAST |
 +| ROCmFP4 CPU finite-block quant scoring | normal GGUF quantization avoids per-value guarded decode during scale-MSE scoring after a block-level finite scan; latest guard measured dual-scale / FAST normal quant at `3844.38` / `3582.57` cycles/32 |
 +| ROCmFP4 weighted/imatrix finite scoring | FAST imatrix GGUF quantization moved from same-session pre-candidate `5258.07` to `4448.73` / `4447.32` cycles/32 on two guarded passes; dual imatrix stayed in the noisy guarded band |
@@ -2430,10 +2457,10 @@ index 41566d41a..408670d1d 100644
      // available tensor operations:
 diff --git a/ggml/rocmfp4/README.md b/ggml/rocmfp4/README.md
 new file mode 100644
-index 000000000..c0613ef84
+index 000000000..330f45d25
 --- /dev/null
 +++ b/ggml/rocmfp4/README.md
-@@ -0,0 +1,895 @@
+@@ -0,0 +1,902 @@
 +# ROCmFP4
 +
 +ROCmFP4 is the experimental `Q4_0_ROCMFP4` GGUF tensor type for Strix Halo.
@@ -2537,26 +2564,33 @@ index 000000000..c0613ef84
 +  `thinking = 1`; ROCm reported no KFD PIDs after shutdown. The promoted
 +  profile is now covered by the focused
 +  `scripts/check-rocmfp4-qwen35-a3b-mtp-regression.sh` guard, which defaults
-+  to `n-max 3`, q8 main KV, and q4 draft KV with `100.0` short and
-+  `85.0 tok/s` sustained floors.
++  to `n-max 3`, q8 main KV, q4 draft KV, and `p-min 0.25` with `100.0` short
++  and `85.0 tok/s` sustained floors.
 +  Follow-up `p-min 0.25/0.50/0.75`, `p-split 0.05/0.20`, and `n-min 1`
 +  checks on the q4-KV baseline all tied the same `80.5`-`80.8 tok/s` sustained
 +  band, while `p-min 0.25` on the q8-main/q4-draft path tied at `85.4 tok/s`
 +  sustained, so the
-+  conservative `n-min 0`, `p-min 0.0`, `p-split 0.10` defaults remain
-+  promoted. A later p-min sweep on the actual promoted `n-max 3`,
-+  q8-main/q4-draft profile measured `104.2` / `89.1` at `p-min 0.25`,
-+  `104.1` / `89.0` at `0.50`, `104.0` / `89.3` at `0.75`, and
-+  `104.2` / `89.1` at `0.90`. Follow-up p-split checks measured
-+  `103.7` / `88.9` at `0.05` and `103.8` / `89.3` at `0.20`; n-min checks
-+  measured `103.8` / `88.9` for `1` and `104.2` / `89.2` for `2`. None beat
-+  the promoted sustained-plus-short profile. Combined `p-min`/`p-split`
-+  follow-ups also tied rather than beat the default: `p-min 0.25` with
-+  `p-split 0.30` repeated at `104.6` / `89.5`, `p-split 0.40` and `0.50`
-+  measured `104.6` / `89.5` and `104.4` / `89.5`, and `p-split 0.70` /
-+  `0.90` measured `104.8` / `89.5` and `104.7` / `89.5`; the same-session
-+  default tied at `104.7` / `89.5`, so no combined probability profile is
-+  promoted. The full all-regression harness can include it with
++  conservative `n-min 0`, `p-min 0.0`, `p-split 0.10` defaults remained
++  promoted until the MTP internal sampler was changed from `top_k=1` to
++  `top_k=10`, making the `p-min` cutoff operate on a meaningful candidate
++  distribution while the draft loop still selects the top sorted candidate.
++  A pre-change p-min sweep on the actual promoted `n-max 3`, q8-main/q4-draft
++  profile measured `104.2` / `89.1` at `p-min 0.25`, `104.1` / `89.0` at
++  `0.50`, `104.0` / `89.3` at `0.75`, and `104.2` / `89.1` at `0.90`.
++  Follow-up p-split checks measured `103.7` / `88.9` at `0.05` and
++  `103.8` / `89.3` at `0.20`; n-min checks measured `103.8` / `88.9` for
++  `1` and `104.2` / `89.2` for `2`. None beat the promoted
++  sustained-plus-short profile. Combined `p-min`/`p-split` follow-ups also
++  tied rather than beat the default: `p-min 0.25` with `p-split 0.30`
++  repeated at `104.6` / `89.5`, `p-split 0.40` and `0.50` measured
++  `104.6` / `89.5` and `104.4` / `89.5`, and `p-split 0.70` / `0.90`
++  measured `104.8` / `89.5` and `104.7` / `89.5`; the same-session default
++  tied at `104.7` / `89.5`. With `top_k=10`, the 35B A3B profile now promotes
++  `--spec-draft-p-min 0.25`: default `p-min 0.0` measured `104.3` / `89.3`,
++  while `p-min 0.25` measured `103.9` / `90.0` after a first sustained run at
++  `89.8 tok/s`. The dense 27B profile should stay at `p-min 0.0`; the same
++  `p-min 0.25` filter regressed it to `24.6 tok/s` sustained. The full
++  all-regression harness can include the 35B guard with
 +  `INCLUDE_QWEN35_A3B_GUARD=1`.
 +- Reasoning-off checks on the final 35B q8-main/q4-draft profile are a
 +  separate lower-throughput mode. `n-max 1/2/3/4` measured `77.7` / `73.9`,
@@ -9563,7 +9597,7 @@ index 000000000..7967fb1ae
 +fi
 diff --git a/scripts/check-rocmfp4-qwen35-a3b-mtp-regression.sh b/scripts/check-rocmfp4-qwen35-a3b-mtp-regression.sh
 new file mode 100755
-index 000000000..d7a683e91
+index 000000000..c472bbdb5
 --- /dev/null
 +++ b/scripts/check-rocmfp4-qwen35-a3b-mtp-regression.sh
 @@ -0,0 +1,19 @@
@@ -9576,7 +9610,7 @@ index 000000000..d7a683e91
 +MODEL="${MODEL:-/home/caf/strix-fp4/models/Qwen3.6-35B-A3B-MTP-GGUF/Qwen3.6-35B-A3B-MTP-BF16-to-ROCmFP4-STRIX_LEAN.gguf}" \
 +SPEC_DRAFT_N_MAX="${SPEC_DRAFT_N_MAX:-3}" \
 +SPEC_DRAFT_N_MIN="${SPEC_DRAFT_N_MIN:-0}" \
-+SPEC_DRAFT_P_MIN="${SPEC_DRAFT_P_MIN:-0.0}" \
++SPEC_DRAFT_P_MIN="${SPEC_DRAFT_P_MIN:-0.25}" \
 +SPEC_DRAFT_P_SPLIT="${SPEC_DRAFT_P_SPLIT:-0.10}" \
 +CACHE_TYPE_K="${CACHE_TYPE_K:-q8_0}" \
 +CACHE_TYPE_V="${CACHE_TYPE_V:-q8_0}" \
