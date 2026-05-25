@@ -9,7 +9,7 @@ index 5f53fbf7a..6b309dee3 100644
 +/bench-reports/
  /common/build-info.cpp
  /tools/server/public
-
+ 
 diff --git a/README.md b/README.md
 index de93f17eb..cc685fa94 100644
 --- a/README.md
@@ -17,11 +17,11 @@ index de93f17eb..cc685fa94 100644
 @@ -1,597 +1,200 @@
 -# llama.cpp
 +# ROCmFP4 for llama.cpp
-
+ 
 -![llama](https://user-images.githubusercontent.com/1991296/230134379-7181e485-c521-4d23-a0d6-f7b3b61ba524.png)
 +Experimental AMD-focused FP4 quantization and backend work for `llama.cpp`,
 +developed on Framework Desktop with AMD Strix Halo 395+ and 128 GB unified RAM.
-
+ 
 -[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](https://opensource.org/licenses/MIT)
 -[![Release](https://img.shields.io/github/v/release/ggml-org/llama.cpp)](https://github.com/ggml-org/llama.cpp/releases)
 -[![Server](https://github.com/ggml-org/llama.cpp/actions/workflows/server.yml/badge.svg)](https://github.com/ggml-org/llama.cpp/actions/workflows/server.yml)
@@ -29,18 +29,18 @@ index de93f17eb..cc685fa94 100644
 +Vulkan shader support, and reproducible regression guards for long-context MTP
 +inference. The goal is a practical 4-bit format for AMD systems that keeps model
 +coherence protected while improving memory use and decode speed.
-
+ 
 -[Manifesto](https://github.com/ggml-org/llama.cpp/discussions/205) / [ggml](https://github.com/ggml-org/ggml) / [ops](https://github.com/ggml-org/llama.cpp/blob/master/docs/ops.md)
 +> Status: experimental research build. Results are hardware-, driver-, model-,
 +> and prompt-sensitive. Do not treat these numbers as upstream llama.cpp claims
 +> until they are independently reproduced.
-
+ 
 -LLM inference in C/C++
 +## What Is ROCmFP4?
-
+ 
 -## Recent API changes
 +ROCmFP4 is a custom 4-bit weight format for GGUF models:
-
+ 
 -- [Changelog for `libllama` API](https://github.com/ggml-org/llama.cpp/issues/9289)
 -- [Changelog for `llama-server` REST API](https://github.com/ggml-org/llama.cpp/issues/9291)
 +- `Q4_0_ROCMFP4`: dual-scale 4.50 BPW layout using two finite UE4M3 scale bytes
@@ -53,12 +53,12 @@ index de93f17eb..cc685fa94 100644
 +  layouts.
 +- Vulkan decode and MMQ shader support for the same GGUF tensor types.
 +- MTP regression guards for long-context target/draft decode.
-
+ 
 -## Hot topics
 +ROCmFP4 is not MXFP4, NVFP4, or a renamed Q4 format. It uses a Codebook10 4-bit
 +value table and finite unsigned E4M3 half-scale semantics tuned for the current
 +AMD backend paths in this tree.
-
+ 
 -- **Hugging Face cache migration: models downloaded with `-hf` are now stored in the standard Hugging Face cache directory, enabling sharing with other HF tools.**
 -- **[guide : using the new WebUI of llama.cpp](https://github.com/ggml-org/llama.cpp/discussions/16938)**
 -- [guide : running gpt-oss with llama.cpp](https://github.com/ggml-org/llama.cpp/discussions/15396)
@@ -70,26 +70,26 @@ index de93f17eb..cc685fa94 100644
 -- Hugging Face Inference Endpoints now support GGUF out of the box! https://github.com/ggml-org/llama.cpp/discussions/9669
 -- Hugging Face GGUF editor: [discussion](https://github.com/ggml-org/llama.cpp/discussions/9268) | [tool](https://huggingface.co/spaces/CISCai/gguf-editor)
 +## Proven Local Results
-
+ 
 -----
 +Current strongest reproduced local result:
-
+ 
 -## Quick start
 +| Hardware | Model | Backend | Context | Profile | Decode |
 +|---|---|---:|---:|---|---:|
 +| Framework AMD Strix Halo 395+, 128 GB unified RAM | Qwen3.6 35B A3B MTP ROCmFP4 STRIX_LEAN | ROCm0 | 262144 | reasoning on, draft-MTP, q8 main KV, q4 draft KV | 104.4 tok/s short, 89.3 tok/s sustained |
 +| Framework AMD Strix Halo 395+, 128 GB unified RAM | Qwen3.6 27B MTP ROCmFP4 STRIX_LEAN | ROCm0 | 262144 | draft-MTP | 33.6 tok/s short, 28.0 tok/s sustained |
-
+ 
 -Getting started with llama.cpp is straightforward. Here are several ways to install it on your machine:
 +The benchmark policy is intentionally conservative: a microbenchmark win is not
 +promoted unless end-to-end decode guards hold or improve.
-
+ 
 -- Install `llama.cpp` using [brew, nix or winget](docs/install.md)
 -- Run with Docker - see our [Docker documentation](docs/docker.md)
 -- Download pre-built binaries from the [releases page](https://github.com/ggml-org/llama.cpp/releases)
 -- Build from source by cloning this repository - check out [our build guide](docs/build.md)
 +## Repository Layout
-
+ 
 -Once installed, you'll need a model to work with. Head to the [Obtaining and quantizing models](#obtaining-and-quantizing-models) section to learn more.
 +- `ggml/rocmfp4/` - ROCmFP4 format definitions, CPU reference quant/dequant, and
 +  HIP helper kernels.
@@ -104,15 +104,15 @@ index de93f17eb..cc685fa94 100644
 +- `docs/ROCmFP4-REPRODUCIBILITY.md` - promotion rules and proof commands.
 +- `docs/STRIX-HALO-QUICKSTART.md` - install, build, quantize, run, and
 +  validation path for Strix Halo users.
-
+ 
 -Example command:
 +## Build
-
+ 
 -```sh
 -# Use a local model file
 -llama-cli -m my_model.gguf
 +Recommended Strix Halo ROCm + Vulkan build:
-
+ 
 -# Or download and run a model directly from Hugging Face
 -llama-cli -hf ggml-org/gemma-3-1b-it-GGUF
 -
@@ -377,7 +377,7 @@ index de93f17eb..cc685fa94 100644
 +git checkout mtp-rocmfp4-strix
 +env JOBS=16 scripts/build-strix-rocmfp4-mtp.sh
  ```
-
+ 
 -By default, the CLI would download from Hugging Face, you can switch to other options with the environment variable `MODEL_ENDPOINT`. The `MODEL_ENDPOINT` must point to a Hugging Face compatible API endpoint.
 -
 -After downloading a model, use the CLI tools to run it locally - see below.
@@ -481,11 +481,11 @@ index de93f17eb..cc685fa94 100644
 +See `docs/STRIX-HALO-QUICKSTART.md` for prerequisites, runtime commands, MTP
 +flags, and troubleshooting. If this GitHub repository is private, public users
 +cannot clone it until the owner makes it public or invites them.
-
+ 
 -- <details>
 -    <summary>Serve an embedding model</summary>
 +The build script creates:
-
+ 
 -    ```bash
 -    # use the /embedding endpoint
 -    llama-server -m model.gguf --embedding --pooling cls -ub 8192
@@ -558,11 +558,11 @@ index de93f17eb..cc685fa94 100644
 +build-strix-rocmfp4/bin/test-quantize-fns
 +build-strix-rocmfp4/bin/test-quantize-perf
 +```
-
+ 
 -    ```bash
 -    llama-bench -m model.gguf
 +## Quantize a Model
-
+ 
 -    # Output:
 -    # | model               |       size |     params | backend    | threads |          test |                  t/s |
 -    # | ------------------- | ---------: | ---------: | ---------- | ------: | ------------: | -------------------: |
@@ -574,10 +574,10 @@ index de93f17eb..cc685fa94 100644
 +Start from an F16 or BF16 GGUF source model. Quantizing an already heavily
 +quantized GGUF into ROCmFP4 is useful for smoke tests only; for real quality,
 +use an F16/BF16 source.
-
+ 
 -    </details>
 +Compact Strix profile:
-
+ 
 -## [`llama-simple`](examples/simple)
 +```bash
 +./build-strix-rocmfp4/bin/llama-quantize \
@@ -585,10 +585,10 @@ index de93f17eb..cc685fa94 100644
 +  /path/to/model-ROCmFP4-STRIX_LEAN.gguf \
 +  Q4_0_ROCMFP4_STRIX_LEAN
 +```
-
+ 
 -#### A minimal example for implementing apps with `llama.cpp`. Useful for developers.
 +Quality-biased Strix profile:
-
+ 
 -- <details>
 -    <summary>Basic text completion</summary>
 +```bash
@@ -597,27 +597,27 @@ index de93f17eb..cc685fa94 100644
 +  /path/to/model-ROCmFP4-STRIX.gguf \
 +  Q4_0_ROCMFP4_STRIX
 +```
-
+ 
 -    ```bash
 -    llama-simple -m model.gguf
 +Pure experimental formats:
-
+ 
 -    # Hello my name is Kaitlyn and I am a 16 year old girl. I am a junior in high school and I am currently taking a class called "The Art of
 -    ```
 +```bash
 +./build-strix-rocmfp4/bin/llama-quantize source.gguf out-dual.gguf Q4_0_ROCMFP4
 +./build-strix-rocmfp4/bin/llama-quantize source.gguf out-fast.gguf Q4_0_ROCMFP4_FAST
 +```
-
+ 
 -    </details>
 +Use the Strix presets for serious testing. The pure FAST format is smaller and
 +can be faster, but may trade away too much coherence on sensitive tensors.
-
+ 
 +## Run a ROCmFP4 Model
-
+ 
 -## Contributing
 +Example interactive run:
-
+ 
 -- Contributors can open PRs
 -- Collaborators will be invited based on contributions
 -- Maintainers can push to branches in the `llama.cpp` repo and merge PRs into the `master` branch
@@ -650,20 +650,20 @@ index de93f17eb..cc685fa94 100644
 +  --reasoning on \
 +  --jinja
 +```
-
+ 
 -## Other documentation
 +For models that do not support MTP or reasoning, remove the `--spec-*` and
 +`--reasoning` flags.
-
+ 
 -- [cli](tools/cli/README.md)
 -- [completion](tools/completion/README.md)
 -- [server](tools/server/README.md)
 -- [GBNF grammars](grammars/README.md)
 +## Regression Guards
-
+ 
 -#### Development documentation
 +Run the full promoted gate:
-
+ 
 -- [How to build](docs/build.md)
 -- [Running on Docker](docs/docker.md)
 -- [Build on Android](docs/android.md)
@@ -673,10 +673,10 @@ index de93f17eb..cc685fa94 100644
 +```bash
 +env HSA_OVERRIDE_GFX_VERSION=11.5.1 scripts/check-rocmfp4-all-regression.sh
 +```
-
+ 
 -#### Seminal papers and background on the models
 +Focused guards:
-
+ 
 -If your issue is with model generation quality, then please at least scan the following links and papers to understand the limitations of LLaMA models. This is especially important when choosing an appropriate model size and appreciating both the significant and subtle differences between LLaMA models and ChatGPT:
 -- LLaMA:
 -    - [Introducing LLaMA: A foundational, 65-billion-parameter large language model](https://ai.facebook.com/blog/large-language-model-llama-meta-ai/)
@@ -694,7 +694,7 @@ index de93f17eb..cc685fa94 100644
 +scripts/check-rocmfp4-qwen-mtp-regression.sh
 +scripts/check-rocmfp4-qwen35-a3b-mtp-regression.sh
 +```
-
+ 
 -## XCFramework
 -The XCFramework is a precompiled version of the library for iOS, visionOS, tvOS,
 -and macOS. It can be used in Swift projects without the need to compile the
@@ -705,10 +705,10 @@ index de93f17eb..cc685fa94 100644
 +The scripts accept environment overrides for model paths, binary paths, context,
 +cache type, MTP settings, and speed floors. See each script for the exact
 +variables.
-
+ 
 -import PackageDescription
 +## Design Principles
-
+ 
 -let package = Package(
 -    name: "MyLlamaPackage",
 -    targets: [
@@ -733,11 +733,11 @@ index de93f17eb..cc685fa94 100644
 +  kernels exist.
 +- Rejected experiments are recorded so they are not repeatedly rediscovered.
 +- Claims must cite model, backend, context window, flags, hardware, and date.
-
+ 
 -## Completions
 -Command-line completion is available for some environments.
 +## Current Limitations
-
+ 
 -#### Bash Completion
 -```bash
 -$ build/bin/llama-cli --completion-bash > ~/.llama-completion.bash
@@ -755,10 +755,10 @@ index de93f17eb..cc685fa94 100644
 +- TurboQuant and TriAttention are not runtime flags in this isolated tree.
 +- Some scripts reference local model defaults; override `MODEL`, `ROCMFP4_MODEL`,
 +  or `BASELINE_MODEL` for your checkout.
-
+ 
 -## Dependencies
 +## License
-
+ 
 -- [yhirose/cpp-httplib](https://github.com/yhirose/cpp-httplib) - Single-header HTTP server, used by `llama-server` - MIT license
 -- [stb-image](https://github.com/nothings/stb) - Single-header image format decoder, used by multimodal subsystem - Public domain
 -- [nlohmann/json](https://github.com/nlohmann/json) - Single-header JSON library, used by various tools/examples - MIT License
@@ -827,7 +827,7 @@ index eac878960..2b8436ab3 100644
 +    GGML_TYPE_Q4_0_ROCMFP4,
 +    GGML_TYPE_Q4_0_ROCMFP4_FAST,
  };
-
+ 
  static ggml_type kv_cache_type_from_str(const std::string & s) {
 diff --git a/common/speculative.cpp b/common/speculative.cpp
 index 3488b9393..3d6a7345c 100644
@@ -836,7 +836,7 @@ index 3488b9393..3d6a7345c 100644
 @@ -150,12 +150,26 @@ struct common_speculative_impl {
      virtual bool need_embd() const = 0;
  };
-
+ 
 +static void common_speculative_batch_add_one_seq(
 +        llama_batch & batch, llama_token id, llama_pos pos, llama_seq_id seq_id, bool logits) {
 +    GGML_ASSERT(batch.seq_id[batch.n_tokens] && "llama_batch size exceeded");
@@ -852,40 +852,40 @@ index 3488b9393..3d6a7345c 100644
 +
  struct common_speculative_impl_draft_simple : public common_speculative_impl {
      common_params_speculative_draft params;
-
+ 
      llama_batch batch;
-
+ 
      std::vector<common_sampler_ptr> smpls;
 +    std::vector<uint8_t> drafting;
-
+ 
      common_speculative_impl_draft_simple(const common_params_speculative & params, uint32_t n_seq)
          : common_speculative_impl(COMMON_SPECULATIVE_TYPE_DRAFT_SIMPLE, n_seq)
 @@ -209,6 +223,8 @@ struct common_speculative_impl_draft_simple : public common_speculative_impl {
-
+ 
              throw std::runtime_error("the draft model number of sequences is incompatible with the speculative n_seq");
          }
 +
 +        drafting.assign(n_seq, 0);
      }
-
+ 
      ~common_speculative_impl_draft_simple() override {
 @@ -240,7 +256,7 @@ struct common_speculative_impl_draft_simple : public common_speculative_impl {
-
+ 
          // keep track of which sequences are still drafting
          int n_drafting = 0;
 -        std::vector<bool> drafting(n_seq);
 +        std::fill(drafting.begin(), drafting.end(), 0);
-
+ 
          for (llama_seq_id seq_id = 0; seq_id < (llama_seq_id) n_seq; ++seq_id) {
              auto & dp = dparams[seq_id];
 @@ -250,10 +266,14 @@ struct common_speculative_impl_draft_simple : public common_speculative_impl {
              }
-
+ 
              n_drafting++;
 -            drafting[seq_id] = true;
 +            drafting[seq_id] = 1;
              common_sampler_reset(smpls[seq_id].get());
-
+ 
 -            common_batch_add(batch, dp.id_last, dp.n_past, { seq_id }, true);
 +            common_speculative_batch_add_one_seq(batch, dp.id_last, dp.n_past, seq_id, true);
 +        }
@@ -893,20 +893,20 @@ index 3488b9393..3d6a7345c 100644
 +        if (n_drafting == 0) {
 +            return;
          }
-
+ 
          int ret = llama_decode(ctx_dft, batch);
 @@ -263,6 +283,7 @@ struct common_speculative_impl_draft_simple : public common_speculative_impl {
          }
-
+ 
          int i = 0;
 +        const bool log_debug = LOG_LEVEL_DEBUG <= common_log_get_verbosity_thold();
-
+ 
          while (n_drafting > 0) {
              int i_batch = 0;
 @@ -281,10 +302,12 @@ struct common_speculative_impl_draft_simple : public common_speculative_impl {
-
+ 
                  const auto * cur_p = common_sampler_get_candidates(smpl, true);
-
+ 
 -                for (int k = 0; k < std::min(3, (int) cur_p->size); ++k) {
 -                    LOG_DBG(" - seq_id %d, draft candidate %3d, pos %3d: %6d (%8.3f) '%s'\n",
 -                            seq_id, k, i, cur_p->data[k].id, cur_p->data[k].p,
@@ -918,27 +918,27 @@ index 3488b9393..3d6a7345c 100644
 +                                common_token_to_piece(ctx_dft, cur_p->data[k].id).c_str());
 +                    }
                  }
-
+ 
                  // add drafted token for each sequence
 @@ -292,7 +315,7 @@ struct common_speculative_impl_draft_simple : public common_speculative_impl {
-
+ 
                  // only collect very high-confidence draft tokens
                  if (cur_p->data[0].p < params.p_min) {
 -                    drafting[seq_id] = false;
 +                    drafting[seq_id] = 0;
                      n_drafting--;
-
+ 
                      continue;
 @@ -300,19 +323,19 @@ struct common_speculative_impl_draft_simple : public common_speculative_impl {
-
+ 
                  common_sampler_accept(smpl, id, true);
-
+ 
 -                auto & dp = dparams.at(seq_id);
 +                auto & dp = dparams[seq_id];
                  auto & result = *dp.result;
-
+ 
                  result.push_back(id);
-
+ 
                  if ((params.n_max <= (int) result.size()) ||
                      (dp.n_max > 0 && dp.n_max <= (int) result.size())) {
 -                    drafting[seq_id] = false;
@@ -946,49 +946,49 @@ index 3488b9393..3d6a7345c 100644
                      n_drafting--;
                      continue;
                  }
-
+ 
 -                common_batch_add(batch, id, dp.n_past + i + 1, { seq_id }, true);
 +                common_speculative_batch_add_one_seq(batch, id, dp.n_past + i + 1, seq_id, true);
              }
-
+ 
              if (batch.n_tokens == 0) {
 @@ -403,6 +426,7 @@ struct common_speculative_state_draft_mtp : public common_speculative_impl {
      // roll back ctx_dft's recurrent state past the AR draft's redundant
      // pre-advancement before process() mirrored the verify batch.
      std::vector<uint16_t> last_n_drafted;
 +    std::vector<uint8_t> drafting;
-
+ 
      common_speculative_state_draft_mtp(const common_params_speculative & params, uint32_t n_seq)
          : common_speculative_impl(COMMON_SPECULATIVE_TYPE_DRAFT_MTP, n_seq)
 @@ -438,9 +462,13 @@ struct common_speculative_state_draft_mtp : public common_speculative_impl {
          i_batch_end.assign(n_seq, -1);
-
+ 
          verify_h.assign(n_seq, {});
 +        for (auto & h : verify_h) {
 +            h.reserve((size_t) std::max<int32_t>(1, this->params.n_max) * n_embd);
 +        }
          verify_h_rows.assign(n_seq, 0);
-
+ 
          last_n_drafted.assign(n_seq, 0);
 +        drafting.assign(n_seq, 0);
      }
-
+ 
      ~common_speculative_state_draft_mtp() override {
 @@ -479,20 +507,22 @@ struct common_speculative_state_draft_mtp : public common_speculative_impl {
-
+ 
          const int32_t n_tokens = batch_in.n_tokens;
-
+ 
 -        // remember the frist and last batch index for each sequence
 +        // remember the first and last batch index for each sequence
          std::fill(i_batch_beg.begin(), i_batch_beg.end(), -1);
          std::fill(i_batch_end.begin(), i_batch_end.end(), -1);
 +        std::fill(verify_h_rows.begin(), verify_h_rows.end(), 0);
-
+ 
          for (int k = 0; k < n_tokens; ++k) {
 -            for (llama_seq_id seq_id = 0; seq_id < (llama_seq_id) n_seq; ++seq_id) {
 -                GGML_ASSERT(batch_in.n_seq_id[k] == 1);
 +            GGML_ASSERT(batch_in.n_seq_id[k] == 1);
-
+ 
 -                if (batch_in.seq_id[k][0] == seq_id) {
 -                    i_batch_end[seq_id] = k;
 -                    if (i_batch_beg[seq_id] < 0) {
@@ -1005,27 +1005,27 @@ index 3488b9393..3d6a7345c 100644
 +                i_batch_beg[seq_id] = k;
              }
          }
-
+ 
 @@ -504,7 +534,7 @@ struct common_speculative_state_draft_mtp : public common_speculative_impl {
          common_batch_clear(batch);
-
+ 
          for (int k = 0; k < n_tokens; ++k) {
 -            common_batch_add(batch, batch_in.token[k], batch_in.pos[k], { batch_in.seq_id[k][0] }, 0);
 +            common_speculative_batch_add_one_seq(batch, batch_in.token[k], batch_in.pos[k], batch_in.seq_id[k][0], false);
          }
-
+ 
          // shift the tgt embeddings to the right by one position
 @@ -545,22 +575,32 @@ struct common_speculative_state_draft_mtp : public common_speculative_impl {
              return false;
          }
-
+ 
 +        const float * h_tgt = llama_get_embeddings_pre_norm(ctx_tgt);
 +
          for (llama_seq_id seq_id = 0; seq_id < (llama_seq_id) n_seq; ++seq_id) {
              if (i_batch_end[seq_id] < 0) {
                  continue;
              }
-
+ 
              const int32_t n_rows = i_batch_end[seq_id] - i_batch_beg[seq_id] + 1;
 -            verify_h_rows[seq_id] = n_rows;
 -            verify_h[seq_id].resize((size_t) n_rows * n_embd);
@@ -1035,7 +1035,7 @@ index 3488b9393..3d6a7345c 100644
 +                std::memcpy(pending_h[seq_id].data(), h_last, row_bytes);
 +                continue;
 +            }
-
+ 
 -            for (int32_t i = 0; i < n_rows; ++i) {
 -                const float * h = llama_get_embeddings_pre_norm_ith(ctx_tgt, i_batch_beg[seq_id] + i);
 -                std::memcpy(verify_h[seq_id].data() + (size_t) i * n_embd, h, row_bytes);
@@ -1047,41 +1047,41 @@ index 3488b9393..3d6a7345c 100644
 +            if (n_verify_floats > 0) {
 +                std::memcpy(verify_h[seq_id].data(), h_seq, n_verify_floats * sizeof(float));
              }
-
+ 
 -            std::memcpy(pending_h[seq_id].data(),
 -                    verify_h[seq_id].data() + (size_t) (n_rows - 1) * n_embd, row_bytes);
 +            const float * h_last = h_seq + (size_t) (n_rows - 1) * n_embd;
 +            std::memcpy(pending_h[seq_id].data(), h_last, row_bytes);
          }
-
+ 
          return true;
 @@ -573,7 +613,7 @@ struct common_speculative_state_draft_mtp : public common_speculative_impl {
-
+ 
          // keep track of which sequences are still drafting
          int n_drafting = 0;
 -        std::vector<bool> drafting(n_seq);
 +        std::fill(drafting.begin(), drafting.end(), 0);
-
+ 
          const float * h_row = nullptr;
          const size_t row_bytes = (size_t) n_embd * sizeof(float);
 @@ -585,16 +625,22 @@ struct common_speculative_state_draft_mtp : public common_speculative_impl {
                  continue;
              }
-
+ 
 +            last_n_drafted[seq_id] = 0;
 +
              n_drafting++;
 -            drafting[seq_id] = true;
 +            drafting[seq_id] = 1;
              common_sampler_reset(smpls[seq_id].get());
-
+ 
 -            common_batch_add(batch, dp.id_last, dp.n_past, { seq_id }, true);
 +            common_speculative_batch_add_one_seq(batch, dp.id_last, dp.n_past, seq_id, true);
-
+ 
              h_row = pending_h[seq_id].data();
              std::memcpy(batch.embd + n_embd*(batch.n_tokens - 1), h_row, row_bytes);
          }
-
+ 
 +        if (n_drafting == 0) {
 +            return;
 +        }
@@ -1091,16 +1091,16 @@ index 3488b9393..3d6a7345c 100644
              LOG_WRN("%s: llama_decode returned %d\n", __func__, ret);
 @@ -602,6 +648,7 @@ struct common_speculative_state_draft_mtp : public common_speculative_impl {
          }
-
+ 
          int i = 0;
 +        const bool log_debug = LOG_LEVEL_DEBUG <= common_log_get_verbosity_thold();
-
+ 
          while (n_drafting > 0) {
              int i_batch = 0;
 @@ -621,29 +668,37 @@ struct common_speculative_state_draft_mtp : public common_speculative_impl {
-
+ 
                  const auto * cur_p = common_sampler_get_candidates(smpl, true);
-
+ 
 -                for (int k = 0; k < std::min(3, (int) cur_p->size); ++k) {
 -                    LOG_DBG(" - seq_id %d, draft candidate %3d, pos %3d: %6d (%8.3f) '%s'\n",
 -                            seq_id, k, i, cur_p->data[k].id, cur_p->data[k].p,
@@ -1112,10 +1112,10 @@ index 3488b9393..3d6a7345c 100644
 +                                common_token_to_piece(ctx_dft, cur_p->data[k].id).c_str());
 +                    }
                  }
-
+ 
                  // add drafted token for each sequence
                  const llama_token id = cur_p->data[0].id;
-
+ 
 +                if (cur_p->data[0].p < params.p_min) {
 +                    drafting[seq_id] = 0;
 +                    n_drafting--;
@@ -1123,33 +1123,33 @@ index 3488b9393..3d6a7345c 100644
 +                }
 +
                  common_sampler_accept(smpl, id, true);
-
+ 
 -                auto & dp = dparams.at(seq_id);
 +                auto & dp = dparams[seq_id];
                  auto & result = *dp.result;
-
+ 
                  result.push_back(id);
-
+ 
                  if (params.n_max <= (int) result.size()) {
 -                    drafting[seq_id] = false;
 +                    drafting[seq_id] = 0;
                      n_drafting--;
                      continue;
                  }
-
+ 
 -                common_batch_add(batch, id, dp.n_past + i + 1, { seq_id }, true);
 +                common_speculative_batch_add_one_seq(batch, id, dp.n_past + i + 1, seq_id, true);
                  std::memcpy(batch.embd + n_embd*(batch.n_tokens - 1), h_row, row_bytes);
              }
-
+ 
 @@ -682,12 +737,16 @@ struct common_speculative_state_draft_mtp : public common_speculative_impl {
-
+ 
          const int32_t n_rows = verify_h_rows[seq_id];
          if (n_rows <= 0) {
 +            last_n_drafted[seq_id] = 0;
              return;
          }
-
+ 
          const int32_t i_h = std::min<int32_t>(n_accepted, n_rows - 1);
 -        const size_t row_bytes = (size_t) n_embd * sizeof(float);
 -        std::memcpy(pending_h[seq_id].data(), verify_h[seq_id].data() + (size_t) i_h * n_embd, row_bytes);
@@ -1159,14 +1159,14 @@ index 3488b9393..3d6a7345c 100644
 +        }
 +        last_n_drafted[seq_id] = 0;
      }
-
+ 
      bool need_embd() const override {
 diff --git a/docs/ROCmFP4-MTP-COMPARISON.md b/docs/ROCmFP4-MTP-COMPARISON.md
 new file mode 100644
-index 000000000..41f3c413f
+index 000000000..688a48d5e
 --- /dev/null
 +++ b/docs/ROCmFP4-MTP-COMPARISON.md
-@@ -0,0 +1,886 @@
+@@ -0,0 +1,894 @@
 +# ROCmFP4 + MTP Comparison
 +
 +Date: 2026-05-23
@@ -1982,6 +1982,14 @@ index 000000000..41f3c413f
 +| dual-scale and FAST MMVQ `vdr=4` | 24.2 | slower sustained decode |
 +| RDNA3.5 two-warp launch for `n=1..4` | 23.6 | slower sustained decode |
 +
++Rejected Qwen3.6 35B A3B MoE launch-shape checks on the promoted reasoning-on
++`n-max 3`, q8-main/q4-draft profile:
++
++| Setting change | Short decode tok/s | Sustained decode tok/s | Result |
++|---|---:|---:|---|
++| ROCmFP4 MoE `rows_per_block=4` | 103.8 | 89.1 | rejected; close sustained tie, but below the promoted `104.3` / `89.3` band |
++| ROCmFP4 MoE `rows_per_block=1` | 103.6 | 88.7 | rejected; slower than default |
++
 +Rejected CPU/reference-path checks from the same optimization pass:
 +
 +| Promoted CPU/reference-path change | Result |
@@ -2391,7 +2399,7 @@ index 41566d41a..408670d1d 100644
 +        GGML_TYPE_Q4_0_ROCMFP4_FAST = 101, // ROCmFP4 single-scale speed layout
 +        GGML_TYPE_COUNT   = 102,
      };
-
+ 
      // precision
 @@ -473,6 +475,13 @@ extern "C" {
          GGML_FTYPE_MOSTLY_MXFP4   = 25, // except 1d tensors
@@ -2405,14 +2413,14 @@ index 41566d41a..408670d1d 100644
 +        GGML_FTYPE_MOSTLY_Q4_0_ROCMFP4_STRIX    = 105, // ROCmFP4 Strix Halo quality/speed recipe
 +        GGML_FTYPE_MOSTLY_Q4_0_ROCMFP4_STRIX_LEAN = 106, // ROCmFP4 Strix Halo size-biased K/V recipe
      };
-
+ 
      // available tensor operations:
 diff --git a/ggml/rocmfp4/README.md b/ggml/rocmfp4/README.md
 new file mode 100644
-index 000000000..b1b987a1c
+index 000000000..c2c0bbc81
 --- /dev/null
 +++ b/ggml/rocmfp4/README.md
-@@ -0,0 +1,885 @@
+@@ -0,0 +1,889 @@
 +# ROCmFP4
 +
 +ROCmFP4 is the experimental `Q4_0_ROCMFP4` GGUF tensor type for Strix Halo.
@@ -2507,6 +2515,10 @@ index 000000000..b1b987a1c
 +  A single-sequence MTP `process()` fast path for `-np 1` was also prototyped,
 +  built, and rejected because the guard dropped to `104.1 tok/s` short and
 +  `88.5 tok/s` sustained; the change was removed.
++  MoE `rows_per_block` compile-time variants were checked against the same 35B
++  guard and also rejected: `rows_per_block=4` measured `103.8` short /
++  `89.1 tok/s` sustained, and `rows_per_block=1` measured `103.6` /
++  `88.7 tok/s`, neither beating the promoted `104.3` / `89.3` band.
 +  The Pi server profile was also started and stopped successfully with
 +  `n_ctx = 262144`, `draft-mtp` initialized, built-in tools enabled, and
 +  `thinking = 1`; ROCm reported no KFD PIDs after shutdown. The promoted
@@ -4355,7 +4367,7 @@ index 3e48860bf..e20b2db18 100644
 +            ../rocmfp4/rocmfp4.c
 +            ../rocmfp4/rocmfp4.h
              gguf.cpp)
-
+ 
  set_target_properties(ggml-base PROPERTIES
 diff --git a/ggml/src/ggml-common.h b/ggml/src/ggml-common.h
 index f05683b44..4a4ee3a7a 100644
@@ -4364,7 +4376,7 @@ index f05683b44..4a4ee3a7a 100644
 @@ -1117,6 +1117,14 @@ GGML_TABLE_BEGIN(int8_t, kvalues_mxfp4, 16)
      0, 1, 2, 3, 4, 6, 8, 12, 0, -1, -2, -3, -4, -6, -8, -12,
  GGML_TABLE_END()
-
+ 
 +// ROCmFP4 uses an E2M1-derived value set with the largest level retuned from
 +// 12 to 10, plus dual half-block UE4M3 scales. Keeping this separate from
 +// MXFP4 lets the experimental Strix Halo format evolve without changing stock
@@ -4385,7 +4397,7 @@ index cd5c61a81..daa0fac4c 100644
  #include "ggml.h"
  #include "common.h"
 +#include "../../rocmfp4/rocmfp4.h"
-
+ 
  #if defined(_MSC_VER) || defined(__MINGW32__)
  #include <malloc.h> // using malloc.h with MSC/MINGW
 @@ -237,6 +238,18 @@ static const struct ggml_type_traits_cpu type_traits_cpu[GGML_TYPE_COUNT] = {
@@ -4430,14 +4442,14 @@ index 7485ba4fc..cb8708740 100644
          case GGML_TYPE_Q3_K:
          case GGML_TYPE_Q4_K:
 @@ -4875,7 +4879,7 @@ static void ggml_compute_forward_get_rows_f32(
-
+ 
  void ggml_compute_forward_get_rows(
          const ggml_compute_params * params,
 -        ggml_tensor * dst) {
 +              ggml_tensor * dst) {
-
+ 
      const ggml_tensor * src0 = dst->src[0];
-
+ 
 @@ -4889,6 +4893,8 @@ void ggml_compute_forward_get_rows(
          case GGML_TYPE_Q8_1:
          case GGML_TYPE_MXFP4:
@@ -4478,7 +4490,7 @@ index 10817505d..3fe59ce96 100644
  #endif
  #include "ggml-common.h"
 +#include "../../rocmfp4/rocmfp4.h"
-
+ 
  #include <array>
  #include <algorithm>
 @@ -50,6 +51,7 @@
@@ -4492,7 +4504,7 @@ index 10817505d..3fe59ce96 100644
 @@ -107,6 +109,24 @@
  #    define GGML_CUDA_USE_CUB
  #endif  // !defined(GGML_USE_HIP) && !defined(GGML_USE_MUSA) && CUDART_VERSION >= 11070
-
+ 
 +// PDL host-side support requires CUDA 11.8+ and is disabled for HIP/MUSA.
 +// The helper is intentionally a no-op on AMD so shared CUDA/HIP kernels compile cleanly.
 +#if !defined(GGML_USE_HIP) && !defined(GGML_USE_MUSA) && CUDART_VERSION >= 11080
@@ -4547,7 +4559,7 @@ index 10817505d..3fe59ce96 100644
 @@ -981,6 +1006,20 @@ struct ggml_cuda_type_traits<GGML_TYPE_MXFP4> {
      static constexpr int qi = QI_MXFP4;
  };
-
+ 
 +template<>
 +struct ggml_cuda_type_traits<GGML_TYPE_Q4_0_ROCMFP4> {
 +    static constexpr int qk = QK_ROCMFP4;
@@ -4641,13 +4653,13 @@ index 61630a35a..a183b0252 100644
  #include "convert.cuh"
  #include "dequantize.cuh"
 +#include "../../rocmfp4/rocmfp4_hip_scale.cuh"
-
+ 
  #include <cstdint>
-
+ 
 @@ -486,6 +487,43 @@ static __global__ void dequantize_block_mxfp4(const void * __restrict__ vx, dst_
      }
  }
-
+ 
 +template<typename dst_t>
 +static __global__ void dequantize_block_rocmfp4(const void * __restrict__ vx, dst_t * __restrict__ yy) {
 +
@@ -4691,7 +4703,7 @@ index 61630a35a..a183b0252 100644
 @@ -617,6 +655,18 @@ static void dequantize_row_mxfp4_cuda(const void * vx, dst_t * y, const int64_t
      dequantize_block_mxfp4<<<nb, 32, 0, stream>>>(vx, y);
  }
-
+ 
 +template<typename dst_t>
 +static void dequantize_row_rocmfp4_hip(const void * vx, dst_t * y, const int64_t k, cudaStream_t stream) {
 +    const int nb = (k + QK_K - 1) / QK_K;
@@ -4767,17 +4779,17 @@ index 7697c292d..54cbf1ba4 100644
 --- a/ggml/src/ggml-cuda/cpy-utils.cuh
 +++ b/ggml/src/ggml-cuda/cpy-utils.cuh
 @@ -2,6 +2,7 @@
-
+ 
  #include "ggml-common.h"
  #include "convert.cuh"
 +#include "../../rocmfp4/rocmfp4_hip_scale.cuh"
-
+ 
  static __device__ __forceinline__ int best_index_int8(int n, const int8_t * val, float x) {
      if (x <= val[0]) return 0;
 @@ -186,6 +187,200 @@ static __device__ void quantize_f32_iq4_nl_block(const float * __restrict__ x, b
      y->d = sumq2 > 0 ? sumqx/sumq2 : d;
  }
-
+ 
 +static __device__ __forceinline__ uint8_t rocmfp4_best_index_scaled_cuda(float x, float inv_scale_half) {
 +    const float a = fabsf(x * inv_scale_half);
 +    if (a <= 0.5f) {
@@ -4978,7 +4990,7 @@ index 7697c292d..54cbf1ba4 100644
 @@ -211,6 +406,56 @@ static __device__ void cpy_blck_f32_iq4_nl(const char * cxi, char * cdsti) {
      quantize_f32_iq4_nl_block((const float *)cxi, (block_iq4_nl *)cdsti);
  }
-
+ 
 +template<typename src_t>
 +static __device__ void cpy_blck_scalar_rocmfp4(const char * cxi, char * cdsti) {
 +    const src_t * x = (const src_t *) cxi;
@@ -5039,7 +5051,7 @@ index d208acf2d..0d5ded3f2 100644
 @@ -11,6 +11,10 @@ const int CUDA_CPY_TILE_DIM_2D = 32; // 2D tile dimension for transposed blocks
  const int CUDA_CPY_BLOCK_NM = 8;     // block size of 3rd dimension if available
  const int CUDA_CPY_BLOCK_ROWS = 8;   // block dimension for marching through rows
-
+ 
 +#ifndef GGML_ROCMFP4_CPY_QUANT_BLOCK_SIZE
 +#define GGML_ROCMFP4_CPY_QUANT_BLOCK_SIZE 128
 +#endif
@@ -5050,7 +5062,7 @@ index d208acf2d..0d5ded3f2 100644
 @@ -119,6 +123,72 @@ static __device__ void cpy_blck_q_f32(const char * cxi, char * cdsti) {
      }
  }
-
+ 
 +static __device__ void cpy_blck_rocmfp4_f32(const char * cxi, char * cdsti) {
 +    const block_rocmfp4 * x = (const block_rocmfp4 *) cxi;
 +    float * cdstf = (float *) cdsti;
@@ -5123,7 +5135,7 @@ index d208acf2d..0d5ded3f2 100644
 @@ -171,6 +241,36 @@ static __global__ void cpy_q_f32(const char * cx, char * cdst, const int64_t ne,
      cpy_blck(cx + x_offset, cdst + dst_offset);
  }
-
+ 
 +template <int qk, int block_bytes>
 +static __global__ void cpy_q_q_block(const char * cx, char * cdst, const int64_t ne,
 +                                     const int64_t ne00, const int64_t ne01, const int64_t ne02, const int64_t nb00, const int64_t nb01, const int64_t nb02,
@@ -5160,7 +5172,7 @@ index d208acf2d..0d5ded3f2 100644
 @@ -308,6 +408,153 @@ static void ggml_cpy_q4_1_f32_cuda(
           ne10, ne11, ne12, nb10, nb11, nb12, nb13);
  }
-
+ 
 +static void ggml_cpy_f32_rocmfp4_hip(
 +    const char * cx, char * cdst, const int64_t ne,
 +    const int64_t ne00, const int64_t ne01, const int64_t ne02, const int64_t nb00, const int64_t nb01, const int64_t nb02,
@@ -5370,13 +5382,13 @@ index 9ae1342fc..8714cc127 100644
 @@ -1,4 +1,5 @@
  #include "common.cuh"
 +#include "../../rocmfp4/rocmfp4_hip_scale.cuh"
-
+ 
  static __device__ __forceinline__ void dequantize_q1_0(const void * vx, const int64_t ib, const int iqs, float2 & v){
      const block_q1_0 * x = (const block_q1_0 *) vx;
 @@ -50,6 +51,27 @@ static __device__ __forceinline__ void dequantize_q4_1(const void * vx, const in
      v.y = (v.y * dm.x) + dm.y;
  }
-
+ 
 +static __device__ __forceinline__ void dequantize_rocmfp4(const void * vx, const int64_t ib, const int iqs, float2 & v) {
 +    const block_rocmfp4 * x = (const block_rocmfp4 *) vx;
 +
@@ -5400,7 +5412,7 @@ index 9ae1342fc..8714cc127 100644
 +
  static __device__ __forceinline__ void dequantize_q5_0(const void * vx, const int64_t ib, const int iqs, float2 & v){
      const block_q5_0 * x = (const block_q5_0 *) vx;
-
+ 
 diff --git a/ggml/src/ggml-cuda/fattn-common.cuh b/ggml/src/ggml-cuda/fattn-common.cuh
 index beeb52389..58c4b64c5 100644
 --- a/ggml/src/ggml-cuda/fattn-common.cuh
@@ -5408,7 +5420,7 @@ index beeb52389..58c4b64c5 100644
 @@ -288,6 +288,118 @@ static __device__ __forceinline__ float vec_dot_fattn_vec_KQ_q8_0(
      return sum;
  }
-
+ 
 +template<int D, int nthreads>
 +static __device__ __forceinline__ float vec_dot_fattn_vec_KQ_rocmfp4(
 +    const char * __restrict__ K_c, const void * __restrict__ Q_v, const int * __restrict__ Q_q8, const void * __restrict__ Q_ds_v) {
@@ -5527,7 +5539,7 @@ index beeb52389..58c4b64c5 100644
 @@ -577,6 +689,104 @@ static __device__ __forceinline__ void dequantize_V_q8_0(const void * __restrict
      }
  }
-
+ 
 +template <typename T, int ne>
 +static __device__ __forceinline__ void dequantize_V_rocmfp4(const void * __restrict__ vx, void * __restrict__ dst, const int64_t i0) {
 +    const block_rocmfp4 * x = (const block_rocmfp4 *) vx;
@@ -5656,7 +5668,7 @@ index f0bd42a57..3bf7df04a 100644
 --- a/ggml/src/ggml-cuda/fattn-vec.cuh
 +++ b/ggml/src/ggml-cuda/fattn-vec.cuh
 @@ -64,14 +64,36 @@ static __global__ void flash_attn_ext_vec(
-
+ 
  #ifdef GGML_USE_HIP
  #ifdef RDNA
 -    constexpr int nthreads_KQ_q = 2;
@@ -5693,16 +5705,16 @@ index f0bd42a57..3bf7df04a 100644
      constexpr int nthreads_V_q  = (D/4 < 32 ? D/4 : 32);
 +    constexpr int V_rows_per_thread_q = 4;
  #endif // GGML_USE_HIP
-
+ 
      constexpr int nthreads    = ggml_cuda_fattn_vec_get_nthreads_device();
 @@ -81,7 +103,7 @@ static __global__ void flash_attn_ext_vec(
      static_assert(WARP_SIZE % nthreads_KQ == 0, "bad nthreads_K");
      static_assert(WARP_SIZE % nthreads_V  == 0, "bad nthreads_V");
-
+ 
 -    constexpr int V_rows_per_thread = (type_V == GGML_TYPE_F16 || type_V == GGML_TYPE_BF16) ? 2*cpy_ne : 4;
 +    constexpr int V_rows_per_thread = (type_V == GGML_TYPE_F16 || type_V == GGML_TYPE_BF16) ? 2*cpy_ne : V_rows_per_thread_q;
      constexpr int V_cols_per_iter   = WARP_SIZE / nthreads_V;
-
+ 
      constexpr vec_dot_KQ_t vec_dot_KQ = get_vec_dot_KQ<type_K, D, nthreads_KQ>();
 @@ -598,3 +620,10 @@ EXTERN_DECL_FATTN_VEC_CASES(256, GGML_TYPE_Q5_0)
  EXTERN_DECL_FATTN_VEC_CASES(256, GGML_TYPE_Q5_1)
@@ -5725,7 +5737,7 @@ index e045b04f7..592a12668 100644
      FATTN_VEC_CASES_ALL_D(GGML_TYPE_BF16, GGML_TYPE_Q8_0)
 +    FATTN_VEC_CASES_ALL_D(GGML_TYPE_Q4_0_ROCMFP4,      GGML_TYPE_Q4_0_ROCMFP4)
 +    FATTN_VEC_CASES_ALL_D(GGML_TYPE_Q4_0_ROCMFP4_FAST, GGML_TYPE_Q4_0_ROCMFP4_FAST)
-
+ 
      FATTN_VEC_CASES_ALL_D(GGML_TYPE_F16,  GGML_TYPE_BF16)
      FATTN_VEC_CASES_ALL_D(GGML_TYPE_Q4_0, GGML_TYPE_BF16)
 @@ -320,6 +322,8 @@ static void ggml_cuda_flash_attn_ext_vec(ggml_backend_cuda_context & ctx, ggml_t
@@ -5772,7 +5784,7 @@ index e25be3592..9c596c3b1 100644
 @@ -90,6 +90,16 @@ static_assert(sizeof(half) == sizeof(ggml_fp16_t), "wrong fp16 size");
  #define GGML_LOG_WARN_ONCE(str) \
      { static std::once_flag warn_flag; std::call_once(warn_flag, []() { GGML_LOG_WARN(str); }); }
-
+ 
 +#if defined(GGML_USE_HIP)
 +#define GGML_BACKEND_INIT_LOG_NAME  "ggml_rocm_init"
 +#define GGML_BACKEND_GRAPH_LOG_NAME "ggml_backend_rocm_graph_compute"
@@ -5789,7 +5801,7 @@ index e25be3592..9c596c3b1 100644
 @@ -121,10 +131,19 @@ int ggml_cuda_get_device() {
      return id;
  }
-
+ 
 +static bool ggml_cuda_enable_unified_memory_env() {
 +#if defined(GGML_USE_HIP)
 +    return getenv("GGML_HIP_ENABLE_UNIFIED_MEMORY") != nullptr ||
@@ -5808,14 +5820,14 @@ index e25be3592..9c596c3b1 100644
  #if defined(GGML_USE_HIP)
          if (err == hipSuccess) {
 @@ -205,7 +224,7 @@ static ggml_cuda_device_info ggml_cuda_init() {
-
+ 
      cudaError_t err = cudaGetDeviceCount(&info.device_count);
      if (err != cudaSuccess) {
 -        GGML_LOG_ERROR("%s: failed to initialize " GGML_CUDA_NAME ": %s\n", __func__, cudaGetErrorString(err));
 +        GGML_LOG_ERROR("%s: failed to initialize " GGML_CUDA_NAME ": %s\n", GGML_BACKEND_INIT_LOG_NAME, cudaGetErrorString(err));
          return info;
      }
-
+ 
 @@ -218,7 +237,7 @@ static ggml_cuda_device_info ggml_cuda_init() {
          total_vram += prop.totalGlobalMem;
      }
@@ -5823,12 +5835,12 @@ index e25be3592..9c596c3b1 100644
 -                  __func__, info.device_count, (size_t)(total_vram / (1024 * 1024)));
 +                  GGML_BACKEND_INIT_LOG_NAME, info.device_count, (size_t)(total_vram / (1024 * 1024)));
      total_vram = 0;
-
+ 
      std::vector<std::pair<int, std::string>> turing_devices_without_mma;
 @@ -1552,6 +1571,13 @@ typedef void (*ggml_cuda_op_mul_mat_t)(
      const char * src1_ddq_i, float * dst_dd_i, const int64_t row_low, const int64_t row_high, const int64_t src1_ncols,
      const int64_t src1_padded_row_size, cudaStream_t stream);
-
+ 
 +static bool ggml_cuda_is_rocmfp4_f16_activation_mul_mat(
 +        const ggml_tensor * src0, const ggml_tensor * src1, const ggml_tensor * dst) {
 +    return (src0->type == GGML_TYPE_Q4_0_ROCMFP4 || src0->type == GGML_TYPE_Q4_0_ROCMFP4_FAST) &&
@@ -5842,12 +5854,12 @@ index e25be3592..9c596c3b1 100644
 @@ -1828,7 +1854,9 @@ static void ggml_cuda_op_mul_mat(
      ggml_backend_cuda_buffer_context * src1_ctx = (ggml_backend_cuda_buffer_context *) src1->buffer->context;
      ggml_backend_cuda_buffer_context * dst_ctx  = (ggml_backend_cuda_buffer_context *) dst->buffer->context;
-
+ 
 -    GGML_ASSERT(src1->type == GGML_TYPE_F32 || (src1->ne[2] == 1 && src1->ne[3] == 1));
 +    GGML_ASSERT(src1->type == GGML_TYPE_F32 ||
 +                ggml_cuda_is_rocmfp4_f16_activation_mul_mat(src0, src1, dst) ||
 +                (src1->ne[2] == 1 && src1->ne[3] == 1));
-
+ 
      GGML_ASSERT(ne12 % ne02 == 0);
      GGML_ASSERT(ne13 % ne03 == 0);
 @@ -1873,6 +1901,7 @@ static void ggml_cuda_op_mul_mat(
@@ -5855,13 +5867,13 @@ index e25be3592..9c596c3b1 100644
          char  * src1_ddq = nullptr; // q8_1
          float *   dst_dd = nullptr;
 +        bool src1_is_staged_f32 = false;
-
+ 
          int64_t  row_low;
          int64_t row_high;
 @@ -1943,12 +1972,29 @@ static void ggml_cuda_op_mul_mat(
              CUDA_CHECK(cudaMemsetAsync(dev[id].src0_dd + nbytes_data, 0, nbytes_padding, stream));
          }
-
+ 
 -        if (src1_on_device && src1_is_contiguous) {
 +        const bool src1_needs_f32_staging = src1->type != GGML_TYPE_F32;
 +        if (src1_on_device && src1_is_contiguous && !src1_needs_f32_staging) {
@@ -5869,7 +5881,7 @@ index e25be3592..9c596c3b1 100644
          } else {
              dev[id].src1_ddf = dev[id].src1_ddf_alloc.alloc(ctx.pool(id), ggml_nelements(src1));
          }
-
+ 
 +        if (src1_on_device && src1_needs_f32_staging) {
 +            if (src1_is_contiguous) {
 +                const to_fp32_cuda_t to_fp32_cuda = ggml_get_to_fp32_cuda(src1->type);
@@ -5892,7 +5904,7 @@ index e25be3592..9c596c3b1 100644
 @@ -1956,10 +2002,13 @@ static void ggml_cuda_op_mul_mat(
              }
              dev[id].src1_ddq = dev[id].src1_ddq_alloc.alloc(ctx.pool(id), src_1_ddq_size);
-
+ 
 -            if (src1_on_device && src1_is_contiguous) {
 +            if (src1_on_device && (src1_is_contiguous || dev[id].src1_is_staged_f32)) {
 +                const int64_t q_s11 = src1_needs_f32_staging ? ne10 : nb11/sizeof(float);
@@ -5907,7 +5919,7 @@ index e25be3592..9c596c3b1 100644
              }
 @@ -2027,7 +2076,9 @@ static void ggml_cuda_op_mul_mat(
                  }
-
+ 
                  // copy src0, src1 to device if necessary
 -                if (src1_is_contiguous) {
 +                const bool src1_prequantized_on_main =
@@ -5919,7 +5931,7 @@ index e25be3592..9c596c3b1 100644
 @@ -2054,7 +2105,7 @@ static void ggml_cuda_op_mul_mat(
                      GGML_ABORT("fatal error");
                  }
-
+ 
 -                if (quantize_src1 && !src1_is_contiguous) {
 +                if (quantize_src1 && !src1_is_contiguous && !dev[id].src1_is_staged_f32) {
                      quantize_src1(
@@ -5939,9 +5951,9 @@ index e25be3592..9c596c3b1 100644
      bool use_mul_mat_q     = ggml_is_quantized(src0->type) && !bad_padding_clear
 -        && src1->type == GGML_TYPE_F32 && dst->type == GGML_TYPE_F32;
 +        && src1_q8_compatible && dst->type == GGML_TYPE_F32;
-
+ 
      bool any_gpus_with_slow_fp16 = false;
-
+ 
 @@ -2600,9 +2654,9 @@ static void ggml_cuda_mul_mat(ggml_backend_cuda_context & ctx, const ggml_tensor
          ggml_cuda_mul_mat_vec_f(ctx, src0, src1, nullptr, dst);
      } else if (!split && use_mul_mat_f) {
@@ -5956,16 +5968,16 @@ index e25be3592..9c596c3b1 100644
          && !ggml_is_transposed(src0) && !ggml_is_transposed(src1) && src1->ne[2]*src1->ne[3] > 1) {
 @@ -3241,7 +3295,7 @@ static void ggml_backend_cuda_synchronize(ggml_backend_t backend) {
  static bool ggml_cuda_graph_check_compability(ggml_cgraph * cgraph) {
-
+ 
      bool use_cuda_graph = true;
 -    // Loop over nodes in GGML graph to obtain info needed for CUDA graph
 +    // Loop over nodes in GGML graph to obtain info needed for backend graph
-
+ 
      for (int i = 0; i < cgraph->n_nodes; i++) {
          ggml_tensor * node = cgraph->nodes[i];
 @@ -3251,9 +3305,9 @@ static bool ggml_cuda_graph_check_compability(ggml_cgraph * cgraph) {
          }
-
+ 
          if (node->src[0] && node->src[0]->buffer && ggml_backend_buft_is_cuda_split(node->src[0]->buffer->buft)) {
 -            use_cuda_graph = false; // Split buffers are not supported by CUDA graph capture
 +            use_cuda_graph = false; // Split buffers are not supported by backend graph capture
@@ -5974,7 +5986,7 @@ index e25be3592..9c596c3b1 100644
 +            GGML_LOG_DEBUG("%s: disabling " GGML_CUDA_NAME " graphs due to split buffer\n", GGML_BACKEND_GRAPH_LOG_NAME);
  #endif
          }
-
+ 
 @@ -3262,12 +3316,12 @@ static bool ggml_cuda_graph_check_compability(ggml_cgraph * cgraph) {
              const int cc = ggml_cuda_info().devices[ggml_cuda_get_device()].cc;
              const int mmvq_mmid_max = get_mmvq_mmid_max_batch(node->src[0]->type, cc);
@@ -5991,7 +6003,7 @@ index e25be3592..9c596c3b1 100644
              }
          }
 @@ -3292,7 +3346,7 @@ static bool ggml_cuda_graph_update_required(ggml_backend_cuda_context * cuda_ctx
-
+ 
      if (cgraph->uid != 0 &&
          cgraph->uid == graph->uid) {
 -        GGML_LOG_DEBUG("CUDA Graph id %zu reused\n", cgraph->uid);
@@ -6000,13 +6012,13 @@ index e25be3592..9c596c3b1 100644
          return false;
      }
 @@ -3340,7 +3394,7 @@ static void ggml_cuda_graph_update_executable(ggml_backend_cuda_context * cuda_c
-
+ 
      if (stat == cudaErrorGraphExecUpdateFailure) {
  #ifndef NDEBUG
 -        GGML_LOG_DEBUG("%s: CUDA graph update failed\n", __func__);
 +        GGML_LOG_DEBUG("%s: " GGML_CUDA_NAME " graph update failed\n", GGML_BACKEND_GRAPH_LOG_NAME);
  #endif
-
+ 
          // The pre-existing graph exec cannot be updated due to violated constraints
 @@ -4441,7 +4495,7 @@ static bool ggml_cuda_graph_set_enabled(ggml_backend_cuda_context * cuda_ctx, co
      if (graph->graph == nullptr) {
@@ -6036,17 +6048,17 @@ index e25be3592..9c596c3b1 100644
                      use_cuda_graph = true;
                      cuda_graph_update_required = graph->instance == nullptr;
 @@ -4897,7 +4951,7 @@ static bool ggml_backend_cuda_get_available_uma_memory(long * available_memory_k
-
+ 
      meminfo_file = fopen("/proc/meminfo", "r");
      if (meminfo_file == nullptr) {
 -        GGML_LOG_ERROR("%s: failed to open /proc/meminfo\n", __func__);
 +        GGML_LOG_ERROR("%s: failed to open /proc/meminfo\n", GGML_BACKEND_UMA_LOG_NAME);
          return false;
      }
-
+ 
 @@ -4906,7 +4960,7 @@ static bool ggml_backend_cuda_get_available_uma_memory(long * available_memory_k
      fclose(meminfo_file);
-
+ 
      if (bytes_read == 0) {
 -        GGML_LOG_ERROR("%s: failed to read from /proc/meminfo\n", __func__);
 +        GGML_LOG_ERROR("%s: failed to read from /proc/meminfo\n", GGML_BACKEND_UMA_LOG_NAME);
@@ -6056,7 +6068,7 @@ index e25be3592..9c596c3b1 100644
 @@ -4950,7 +5004,7 @@ static bool ggml_backend_cuda_get_available_uma_memory(long * available_memory_k
          *free_swap_kb = 0;
      }
-
+ 
 -    GGML_LOG_DEBUG("%s: final available_memory_kb: %ld\n", __func__, *available_memory_kb);
 +    GGML_LOG_DEBUG("%s: final available_memory_kb: %ld\n", GGML_BACKEND_UMA_LOG_NAME, *available_memory_kb);
      return true;
@@ -6064,12 +6076,12 @@ index e25be3592..9c596c3b1 100644
  #endif // defined(__linux__)
 @@ -4967,7 +5021,7 @@ static void ggml_backend_cuda_device_get_memory(ggml_backend_dev_t dev, size_t *
      CUDA_CHECK(cudaGetDeviceProperties(&prop, ctx->device));
-
+ 
      // Check if UMA is explicitly enabled via environment variable
 -    bool uma_env = getenv("GGML_CUDA_ENABLE_UNIFIED_MEMORY") != nullptr;
 +    bool uma_env = ggml_cuda_enable_unified_memory_env();
      bool is_uma = prop.integrated > 0 || uma_env;
-
+ 
      if (is_uma) {
 @@ -4978,7 +5032,7 @@ static void ggml_backend_cuda_device_get_memory(ggml_backend_dev_t dev, size_t *
          if (ggml_backend_cuda_get_available_uma_memory(&available_memory_kb, &free_swap_kb) && available_memory_kb > 0) {
@@ -6219,7 +6231,7 @@ index edf546d8f..4f75e0590 100644
 @@ -898,6 +908,139 @@ template <int mmq_y, bool need_check> static __device__ __forceinline__ void loa
      }
  }
-
+ 
 +template <int mmq_y, bool need_check> static __device__ __forceinline__ void load_tiles_rocmfp4(
 +    const char * __restrict__ x, int * __restrict__ x_tile, const int kbx0, const int i_max, const int stride) {
 +    constexpr int nwarps = mmq_get_nwarps_device();
@@ -6359,7 +6371,7 @@ index edf546d8f..4f75e0590 100644
 @@ -3326,6 +3469,22 @@ struct mmq_type_traits<mmq_x, mmq_y, need_check, GGML_TYPE_MXFP4> {
      static constexpr vec_dot_mmq_t    vec_dot_dp4a = vec_dot_q8_0_q8_1_dp4a<mmq_x, mmq_y>;
  };
-
+ 
 +template <int mmq_x, int mmq_y, bool need_check>
 +struct mmq_type_traits<mmq_x, mmq_y, need_check, GGML_TYPE_Q4_0_ROCMFP4> {
 +    static constexpr int              vdr          = VDR_ROCMFP4_Q8_1_MMQ;
@@ -6380,7 +6392,7 @@ index edf546d8f..4f75e0590 100644
  struct mmq_type_traits<mmq_x, mmq_y, need_check, GGML_TYPE_NVFP4> {
      static constexpr int              vdr          = VDR_NVFP4_Q8_1_MMQ;
 @@ -3470,7 +3629,7 @@ static __device__ __forceinline__ void mul_mat_q_process_tile(
-
+ 
  #if defined(BLACKWELL_MMA_AVAILABLE)
      // FP4 tile stores 8 blocks
 -    constexpr int ne_block = (type == GGML_TYPE_MXFP4 || type == GGML_TYPE_NVFP4) ? QK_K : 4 * QK8_1;
@@ -6399,7 +6411,7 @@ index edf546d8f..4f75e0590 100644
  extern DECL_MMQ_CASE(GGML_TYPE_Q3_K);
 @@ -4173,4 +4334,3 @@ void ggml_cuda_op_mul_mat_q(
      const int64_t src1_padded_row_size, cudaStream_t stream);
-
+ 
  bool ggml_cuda_should_use_mmq(enum ggml_type type, int cc, int64_t ne11, int64_t n_experts);
 -
 diff --git a/ggml/src/ggml-cuda/mmvq.cu b/ggml/src/ggml-cuda/mmvq.cu
@@ -6407,9 +6419,9 @@ index da48f313a..86563adc3 100644
 --- a/ggml/src/ggml-cuda/mmvq.cu
 +++ b/ggml/src/ggml-cuda/mmvq.cu
 @@ -5,6 +5,55 @@
-
+ 
  #include <cstdint>
-
+ 
 +#ifndef GGML_ROCMFP4_RDNA35_NWARPS
 +#define GGML_ROCMFP4_RDNA35_NWARPS 2
 +#endif
@@ -6460,7 +6472,7 @@ index da48f313a..86563adc3 100644
 +#endif
 +
  typedef float (*vec_dot_q_cuda_t)(const void * __restrict__ vbq, const block_q8_1 * __restrict__ bq8_1, const int & kbx, const int & iqs);
-
+ 
  static constexpr __device__ vec_dot_q_cuda_t get_vec_dot_q_cuda(ggml_type type) {
 @@ -16,6 +65,10 @@ static constexpr __device__ vec_dot_q_cuda_t get_vec_dot_q_cuda(ggml_type type)
          case GGML_TYPE_Q5_1:    return vec_dot_q5_1_q8_1;
@@ -6491,7 +6503,7 @@ index da48f313a..86563adc3 100644
 +    MMVQ_PARAMETERS_RDNA3_5,
      MMVQ_PARAMETERS_RDNA4
  };
-
+ 
  static constexpr __device__ mmvq_parameter_table_id get_device_table_id() {
  #if defined(RDNA4)
      return MMVQ_PARAMETERS_RDNA4;
@@ -6541,7 +6553,7 @@ index da48f313a..86563adc3 100644
 @@ -211,6 +282,15 @@ static constexpr __host__ __device__ int get_mmvq_mmid_max_batch_rdna3(ggml_type
      }
  }
-
+ 
 +static constexpr __host__ __device__ int get_mmvq_mmid_max_batch_rdna3_5(ggml_type type) {
 +    switch (type) {
 +        case GGML_TYPE_Q4_0_ROCMFP4:
@@ -6606,7 +6618,7 @@ index da48f313a..86563adc3 100644
 @@ -371,7 +472,7 @@ static constexpr __host__ __device__ int calc_nwarps(ggml_type type, int ncols_d
      return 1;
  }
-
+ 
 -static constexpr __host__ __device__ int calc_rows_per_block(int ncols_dst, int table_id, bool small_k = false, int nwarps = 1) {
 +static constexpr __host__ __device__ int calc_rows_per_block(ggml_type type, int ncols_dst, int table_id, bool small_k = false, int nwarps = 1) {
      if (table_id == MMVQ_PARAMETERS_GENERIC || table_id == MMVQ_PARAMETERS_GCN) {
@@ -6630,7 +6642,7 @@ index da48f313a..86563adc3 100644
 +    }
      return 1;
  }
-
+ 
 @@ -406,7 +519,7 @@ static __global__ void mul_mat_vec_q(
      constexpr int vdr = get_vdr_mmvq(type);
      constexpr mmvq_parameter_table_id table_id = get_device_table_id();
@@ -6638,12 +6650,12 @@ index da48f313a..86563adc3 100644
 -    constexpr int rows_per_cuda_block = calc_rows_per_block(ncols_dst, table_id, small_k, nwarps);
 +    constexpr int rows_per_cuda_block = calc_rows_per_block(type, ncols_dst, table_id, small_k, nwarps);
      constexpr int warp_size = ggml_cuda_get_physical_warp_size();
-
+ 
      constexpr vec_dot_q_cuda_t vec_dot_q_cuda = get_vec_dot_q_cuda(type);
 @@ -505,49 +618,60 @@ static __global__ void mul_mat_vec_q(
          }
      }
-
+ 
 -    __shared__ float tmp_shared[nwarps-1 > 0 ? nwarps-1 : 1][ncols_dst][rows_per_cuda_block][warp_size];
 -    __shared__ float tmp_shared_gate[(has_fusion && (nwarps-1 > 0)) ? nwarps-1 : 1][ncols_dst][rows_per_cuda_block][warp_size];
 -    if constexpr (!has_fusion) {
@@ -6659,7 +6671,7 @@ index da48f313a..86563adc3 100644
 +        } else if (!use_gate) {
 +            (void) tmp_shared_gate;
 +        }
-
+ 
 -    if (threadIdx.y > 0) {
 +        if (threadIdx.y > 0) {
 +#pragma unroll
@@ -6706,9 +6718,9 @@ index da48f313a..86563adc3 100644
 -    if (threadIdx.y > 0) {
 -        return;
 -    }
-
+ 
      dst += sample_dst*stride_sample_dst + channel_dst*stride_channel_dst + row0;
-
+ 
 -    // sum up partial sums and write back result
 +    // reduce the remaining warp-local partial sums and write back result
  #pragma unroll
@@ -6818,12 +6830,12 @@ index af05a9eff..3bd6396e5 100755
 +++ b/ggml/src/ggml-cuda/template-instances/generate_cu_files.py
 @@ -9,6 +9,7 @@ HEAD_SIZES_KQ = [40, 64, 72, 80, 96, 112, 128, 192, 256, 320, 512, 576]
  HEAD_SIZES_V_OVERRIDE = {576: 512, 320: 256, 192: 128}
-
+ 
  TYPES_KV = ["GGML_TYPE_F16", "GGML_TYPE_Q4_0", "GGML_TYPE_Q4_1", "GGML_TYPE_Q5_0", "GGML_TYPE_Q5_1", "GGML_TYPE_Q8_0", "GGML_TYPE_BF16"]
 +TYPES_KV_SELF = ["GGML_TYPE_Q4_0_ROCMFP4", "GGML_TYPE_Q4_0_ROCMFP4_FAST"]
-
+ 
  SOURCE_FATTN_TILE = """// This file has been autogenerated by generate_cu_files.py, do not edit manually.
-
+ 
 @@ -39,7 +40,7 @@ TYPES_MMQ = [
      "GGML_TYPE_Q4_0", "GGML_TYPE_Q4_1", "GGML_TYPE_Q5_0", "GGML_TYPE_Q5_1", "GGML_TYPE_Q8_0",
      "GGML_TYPE_Q2_K", "GGML_TYPE_Q3_K", "GGML_TYPE_Q4_K", "GGML_TYPE_Q5_K", "GGML_TYPE_Q6_K",
@@ -6831,12 +6843,12 @@ index af05a9eff..3bd6396e5 100755
 -    "GGML_TYPE_IQ1_S", "GGML_TYPE_IQ4_NL", "GGML_TYPE_IQ4_XS", "GGML_TYPE_MXFP4", "GGML_TYPE_NVFP4"
 +    "GGML_TYPE_IQ1_S", "GGML_TYPE_IQ4_NL", "GGML_TYPE_IQ4_XS", "GGML_TYPE_MXFP4", "GGML_TYPE_Q4_0_ROCMFP4", "GGML_TYPE_Q4_0_ROCMFP4_FAST", "GGML_TYPE_NVFP4"
  ]
-
+ 
  SOURCE_MMQ = """// This file has been autogenerated by generate_cu_files.py, do not edit manually.
 @@ -74,6 +75,10 @@ for type_k in TYPES_KV:
          with open(f"fattn-vec-instance-{get_short_name(type_k)}-{get_short_name(type_v)}.cu", "w") as f:
              f.write(SOURCE_FATTN_VEC.format(type_k=type_k, type_v=type_v))
-
+ 
 +for type_kv in TYPES_KV_SELF:
 +    with open(f"fattn-vec-instance-{get_short_name(type_kv)}-{get_short_name(type_kv)}.cu", "w") as f:
 +        f.write(SOURCE_FATTN_VEC.format(type_k=type_kv, type_v=type_kv))
@@ -6873,7 +6885,7 @@ index d1741cc8d..c5c74227f 100644
 @@ -94,6 +94,8 @@ static __device__ __forceinline__ int2 get_int_from_table_16(const int & q4, con
  #endif
  }
-
+ 
 +#include "../../rocmfp4/rocmfp4_hip_codebook.cuh"
 +
  static __device__ __forceinline__ uint32_t unpack_ksigns(const uint8_t v) {
@@ -6882,7 +6894,7 @@ index d1741cc8d..c5c74227f 100644
 @@ -325,6 +327,71 @@ static __device__ __forceinline__ float vec_dot_mxfp4_q8_1(
      return d * sumi;
  }
-
+ 
 +#ifndef GGML_ROCMFP4_Q8_1_MMQ_VDR
 +#define GGML_ROCMFP4_Q8_1_MMQ_VDR 8
 +#endif
@@ -6950,14 +6962,14 @@ index d1741cc8d..c5c74227f 100644
 +
  #define VDR_NVFP4_Q8_1_MMVQ 4
  #define VDR_NVFP4_Q8_1_MMQ  8
-
+ 
 diff --git a/ggml/src/ggml-hip/CMakeLists.txt b/ggml/src/ggml-hip/CMakeLists.txt
 index a7d4e0ea2..2ae599dec 100644
 --- a/ggml/src/ggml-hip/CMakeLists.txt
 +++ b/ggml/src/ggml-hip/CMakeLists.txt
 @@ -61,6 +61,7 @@ file(GLOB   GGML_HEADERS_ROCM "../ggml-cuda/*.cuh")
  list(APPEND GGML_HEADERS_ROCM "../../include/ggml-cuda.h")
-
+ 
  file(GLOB   GGML_SOURCES_ROCM "../ggml-cuda/*.cu")
 +list(APPEND GGML_SOURCES_ROCM "../../rocmfp4/rocmfp4_hip.cu")
  file(GLOB   SRCS "../ggml-cuda/template-instances/fattn-tile*.cu")
@@ -6973,14 +6985,14 @@ index a7d4e0ea2..2ae599dec 100644
          ../ggml-cuda/template-instances/fattn-vec-instance-bf16-bf16.cu)
  endif()
 @@ -94,7 +97,7 @@ endif()
-
+ 
  add_compile_definitions(GGML_USE_HIP)
-
+ 
 -if (GGML_CUDA_FORCE_MMQ)
 +if (GGML_HIP_FORCE_MMQ OR GGML_CUDA_FORCE_MMQ)
      add_compile_definitions(GGML_CUDA_FORCE_MMQ)
  endif()
-
+ 
 diff --git a/ggml/src/ggml-quants.c b/ggml/src/ggml-quants.c
 index 15443aa55..111ad79b1 100644
 --- a/ggml/src/ggml-quants.c
@@ -6990,7 +7002,7 @@ index 15443aa55..111ad79b1 100644
  #include "ggml-cpu/ggml-cpu-impl.h"
  #include "ggml-cpu.h"
 +#include "../rocmfp4/rocmfp4.h"
-
+ 
  #include <math.h>
  #include <string.h>
 @@ -5365,6 +5366,20 @@ bool ggml_validate_row_data(enum ggml_type type, const void * data, size_t nbyte
@@ -7044,7 +7056,7 @@ index d29a4bab2..887d4a12e 100644
 +    if (rocmfp4_kv) {
 +        path = FA_SCALAR;
 +    }
-
+ 
      if (path == FA_COOPMAT1 && device->architecture == vk_device_architecture::NVIDIA_TURING) {
          // Nvidia compiler bug, see https://github.com/ggml-org/llama.cpp/pull/19075#issuecomment-3820716090
 @@ -3188,6 +3197,8 @@ static bool ggml_vk_matmul_shmem_support(const vk_device& device, const std::vec
@@ -7083,7 +7095,7 @@ index d29a4bab2..887d4a12e 100644
 +        CREATE_MM2(pipeline_dequant_mul_mat_mat_f16[GGML_TYPE_Q4_0_ROCMFP4], matmul_rocmfp4_f16, mmq_wg_denoms, warptile_mmq, vk_mat_mat_push_constants, 3)
 +        CREATE_MM2(pipeline_dequant_mul_mat_mat_f16[GGML_TYPE_Q4_0_ROCMFP4_FAST], matmul_rocmfp4_fast_f16, mmq_wg_denoms, warptile_mmq, vk_mat_mat_push_constants, 3)
          CREATE_MM2(pipeline_dequant_mul_mat_mat_f16[GGML_TYPE_NVFP4],   matmul_nvfp4_f16,   mmq_wg_denoms, warptile_mmq, vk_mat_mat_push_constants, 3)
-
+ 
          GGML_ASSERT(device->subgroup_ballot);
 @@ -3810,6 +3827,8 @@ static void ggml_vk_load_shaders(vk_device& device) {
          CREATE_MM2(pipeline_dequant_mul_mat_mat_id[GGML_TYPE_IQ4_XS],  matmul_id_subgroup_iq4_xs_f16,  mmqid_wg_denoms, warptile_mmqid, vk_mat_mat_id_push_constants, 5)
@@ -7111,7 +7123,7 @@ index d29a4bab2..887d4a12e 100644
 +            CREATE_MM(GGML_TYPE_Q4_0_ROCMFP4_FAST, pipeline_dequant_mul_mat_mat[GGML_TYPE_Q4_0_ROCMFP4_FAST].f32acc, matmul_rocmfp4_fast_f32, , mmq_wg_denoms, warptile_mmq, vk_mat_mat_push_constants, 3, );
              CREATE_MM(GGML_TYPE_NVFP4,   pipeline_dequant_mul_mat_mat[GGML_TYPE_NVFP4].f32acc,   matmul_nvfp4_f32,   , mmq_wg_denoms, warptile_mmq, vk_mat_mat_push_constants, 3, );
          }
-
+ 
 @@ -3933,6 +3956,8 @@ static void ggml_vk_load_shaders(vk_device& device) {
          CREATE_MM2(GGML_TYPE_IQ4_XS,  pipeline_dequant_mul_mat_mat_id[GGML_TYPE_IQ4_XS],  matmul_id_subgroup_iq4_xs_f32,  mmq_wg_denoms, warptile_mmq, vk_mat_mat_id_push_constants, mul_mat_id_param_count, _id);
          CREATE_MM2(GGML_TYPE_IQ4_NL,  pipeline_dequant_mul_mat_mat_id[GGML_TYPE_IQ4_NL],  matmul_id_subgroup_iq4_nl_f32,  mmq_wg_denoms, warptile_mmq, vk_mat_mat_id_push_constants, mul_mat_id_param_count, _id);
@@ -7128,15 +7140,15 @@ index d29a4bab2..887d4a12e 100644
 +        CREATE_MM2(GGML_TYPE_Q4_0_ROCMFP4, pipeline_dequant_mul_mat_mat[GGML_TYPE_Q4_0_ROCMFP4], matmul_rocmfp4_f32, mmq_wg_denoms, warptile_mmq, vk_mat_mat_push_constants, 3, , 0);
 +        CREATE_MM2(GGML_TYPE_Q4_0_ROCMFP4_FAST, pipeline_dequant_mul_mat_mat[GGML_TYPE_Q4_0_ROCMFP4_FAST], matmul_rocmfp4_fast_f32, mmq_wg_denoms, warptile_mmq, vk_mat_mat_push_constants, 3, , 0);
          CREATE_MM2(GGML_TYPE_NVFP4,   pipeline_dequant_mul_mat_mat[GGML_TYPE_NVFP4],   matmul_nvfp4_f32,   mmq_wg_denoms, warptile_mmq, vk_mat_mat_push_constants, 3, , 0);
-
+ 
  #if defined(GGML_VULKAN_INTEGER_DOT_GLSLC_SUPPORT)
 @@ -4010,6 +4037,8 @@ static void ggml_vk_load_shaders(vk_device& device) {
              CREATE_MMQ(GGML_TYPE_Q8_0, pipeline_dequant_mul_mat_mat_q8_1[GGML_TYPE_Q8_0], matmul_q8_0_q8_1, mmq_wg_denoms, warptile_mmq_int, vk_mat_mat_push_constants, 3, , 0);
-
+ 
              CREATE_MMQ(GGML_TYPE_MXFP4, pipeline_dequant_mul_mat_mat_q8_1[GGML_TYPE_MXFP4], matmul_mxfp4_q8_1, mmq_wg_denoms, warptile_mmq_int, vk_mat_mat_push_constants, 3, , 0);
 +            CREATE_MMQ(GGML_TYPE_Q4_0_ROCMFP4, pipeline_dequant_mul_mat_mat_q8_1[GGML_TYPE_Q4_0_ROCMFP4], matmul_rocmfp4_q8_1, mmq_wg_denoms, warptile_mmq_int, vk_mat_mat_push_constants, 3, , 0);
 +            CREATE_MMQ(GGML_TYPE_Q4_0_ROCMFP4_FAST, pipeline_dequant_mul_mat_mat_q8_1[GGML_TYPE_Q4_0_ROCMFP4_FAST], matmul_rocmfp4_fast_q8_1, mmq_wg_denoms, warptile_mmq_int, vk_mat_mat_push_constants, 3, , 0);
-
+ 
              CREATE_MMQ(GGML_TYPE_Q2_K, pipeline_dequant_mul_mat_mat_q8_1[GGML_TYPE_Q2_K], matmul_q2_k_q8_1, mmq_wg_denoms, warptile_mmq_int_k, vk_mat_mat_push_constants, 3, , 0);
              CREATE_MMQ(GGML_TYPE_Q3_K, pipeline_dequant_mul_mat_mat_q8_1[GGML_TYPE_Q3_K], matmul_q3_k_q8_1, mmq_wg_denoms, warptile_mmq_int_k, vk_mat_mat_push_constants, 3, , 0);
 @@ -4046,6 +4075,8 @@ static void ggml_vk_load_shaders(vk_device& device) {
@@ -7146,15 +7158,15 @@ index d29a4bab2..887d4a12e 100644
 +            CREATE_MM2(GGML_TYPE_Q4_0_ROCMFP4, pipeline_dequant_mul_mat_mat_id[GGML_TYPE_Q4_0_ROCMFP4], matmul_id_subgroup_rocmfp4_f32, mmq_wg_denoms, warptile_mmqid, vk_mat_mat_id_push_constants, mul_mat_id_param_count, _id, mul_mat_subgroup_size);
 +            CREATE_MM2(GGML_TYPE_Q4_0_ROCMFP4_FAST, pipeline_dequant_mul_mat_mat_id[GGML_TYPE_Q4_0_ROCMFP4_FAST], matmul_id_subgroup_rocmfp4_fast_f32, mmq_wg_denoms, warptile_mmqid, vk_mat_mat_id_push_constants, mul_mat_id_param_count, _id, mul_mat_subgroup_size);
              CREATE_MM2(GGML_TYPE_NVFP4,   pipeline_dequant_mul_mat_mat_id[GGML_TYPE_NVFP4],   matmul_id_subgroup_nvfp4_f32,   mmq_wg_denoms, warptile_mmqid, vk_mat_mat_id_push_constants, mul_mat_id_param_count, _id, mul_mat_subgroup_size);
-
+ 
  #if defined(GGML_VULKAN_INTEGER_DOT_GLSLC_SUPPORT)
 @@ -4057,6 +4088,8 @@ static void ggml_vk_load_shaders(vk_device& device) {
                  CREATE_MMQ(GGML_TYPE_Q8_0, pipeline_dequant_mul_mat_mat_id_q8_1[GGML_TYPE_Q8_0], matmul_id_subgroup_q8_0_q8_1, mmq_wg_denoms, warptile_mmqid_int,   vk_mat_mat_id_push_constants, mul_mat_id_param_count, _id, mul_mat_subgroup_size);
-
+ 
                  CREATE_MMQ(GGML_TYPE_MXFP4, pipeline_dequant_mul_mat_mat_id_q8_1[GGML_TYPE_MXFP4], matmul_id_subgroup_mxfp4_q8_1, mmq_wg_denoms, warptile_mmqid_int,   vk_mat_mat_id_push_constants, mul_mat_id_param_count, _id, mul_mat_subgroup_size);
 +                CREATE_MMQ(GGML_TYPE_Q4_0_ROCMFP4, pipeline_dequant_mul_mat_mat_id_q8_1[GGML_TYPE_Q4_0_ROCMFP4], matmul_id_subgroup_rocmfp4_q8_1, mmq_wg_denoms, warptile_mmqid_int, vk_mat_mat_id_push_constants, mul_mat_id_param_count, _id, mul_mat_subgroup_size);
 +                CREATE_MMQ(GGML_TYPE_Q4_0_ROCMFP4_FAST, pipeline_dequant_mul_mat_mat_id_q8_1[GGML_TYPE_Q4_0_ROCMFP4_FAST], matmul_id_subgroup_rocmfp4_fast_q8_1, mmq_wg_denoms, warptile_mmqid_int, vk_mat_mat_id_push_constants, mul_mat_id_param_count, _id, mul_mat_subgroup_size);
-
+ 
                  CREATE_MMQ(GGML_TYPE_Q2_K, pipeline_dequant_mul_mat_mat_id_q8_1[GGML_TYPE_Q2_K], matmul_id_subgroup_q2_k_q8_1, mmq_wg_denoms, warptile_mmqid_int_k, vk_mat_mat_id_push_constants, mul_mat_id_param_count, _id, mul_mat_subgroup_size_16);
                  CREATE_MMQ(GGML_TYPE_Q3_K, pipeline_dequant_mul_mat_mat_id_q8_1[GGML_TYPE_Q3_K], matmul_id_subgroup_q3_k_q8_1, mmq_wg_denoms, warptile_mmqid_int_k, vk_mat_mat_id_push_constants, mul_mat_id_param_count, _id, mul_mat_subgroup_size_16);
 @@ -4092,6 +4125,8 @@ static void ggml_vk_load_shaders(vk_device& device) {
@@ -7164,15 +7176,15 @@ index d29a4bab2..887d4a12e 100644
 +            CREATE_MM2(GGML_TYPE_Q4_0_ROCMFP4, pipeline_dequant_mul_mat_mat_id[GGML_TYPE_Q4_0_ROCMFP4], matmul_id_rocmfp4_f32, mmq_wg_denoms, warptile_mmqid, vk_mat_mat_id_push_constants, mul_mat_id_param_count, _id, 0);
 +            CREATE_MM2(GGML_TYPE_Q4_0_ROCMFP4_FAST, pipeline_dequant_mul_mat_mat_id[GGML_TYPE_Q4_0_ROCMFP4_FAST], matmul_id_rocmfp4_fast_f32, mmq_wg_denoms, warptile_mmqid, vk_mat_mat_id_push_constants, mul_mat_id_param_count, _id, 0);
              CREATE_MM2(GGML_TYPE_NVFP4,   pipeline_dequant_mul_mat_mat_id[GGML_TYPE_NVFP4],   matmul_id_nvfp4_f32,   mmq_wg_denoms, warptile_mmqid, vk_mat_mat_id_push_constants, mul_mat_id_param_count, _id, 0);
-
+ 
  #if defined(GGML_VULKAN_INTEGER_DOT_GLSLC_SUPPORT)
 @@ -4103,6 +4138,8 @@ static void ggml_vk_load_shaders(vk_device& device) {
                  CREATE_MMQ(GGML_TYPE_Q8_0, pipeline_dequant_mul_mat_mat_id_q8_1[GGML_TYPE_Q8_0], matmul_id_q8_0_q8_1, mmq_wg_denoms, warptile_mmqid_int,   vk_mat_mat_id_push_constants, mul_mat_id_param_count, _id, 0);
-
+ 
                  CREATE_MMQ(GGML_TYPE_MXFP4, pipeline_dequant_mul_mat_mat_id_q8_1[GGML_TYPE_MXFP4], matmul_id_mxfp4_q8_1, mmq_wg_denoms, warptile_mmqid_int,   vk_mat_mat_id_push_constants, mul_mat_id_param_count, _id, 0);
 +                CREATE_MMQ(GGML_TYPE_Q4_0_ROCMFP4, pipeline_dequant_mul_mat_mat_id_q8_1[GGML_TYPE_Q4_0_ROCMFP4], matmul_id_rocmfp4_q8_1, mmq_wg_denoms, warptile_mmqid_int, vk_mat_mat_id_push_constants, mul_mat_id_param_count, _id, 0);
 +                CREATE_MMQ(GGML_TYPE_Q4_0_ROCMFP4_FAST, pipeline_dequant_mul_mat_mat_id_q8_1[GGML_TYPE_Q4_0_ROCMFP4_FAST], matmul_id_rocmfp4_fast_q8_1, mmq_wg_denoms, warptile_mmqid_int, vk_mat_mat_id_push_constants, mul_mat_id_param_count, _id, 0);
-
+ 
                  CREATE_MMQ(GGML_TYPE_Q2_K, pipeline_dequant_mul_mat_mat_id_q8_1[GGML_TYPE_Q2_K], matmul_id_q2_k_q8_1, mmq_wg_denoms, warptile_mmqid_int_k, vk_mat_mat_id_push_constants, mul_mat_id_param_count, _id, 0);
                  CREATE_MMQ(GGML_TYPE_Q3_K, pipeline_dequant_mul_mat_mat_id_q8_1[GGML_TYPE_Q3_K], matmul_id_q3_k_q8_1, mmq_wg_denoms, warptile_mmqid_int_k, vk_mat_mat_id_push_constants, mul_mat_id_param_count, _id, 0);
 @@ -4168,6 +4205,8 @@ static void ggml_vk_load_shaders(vk_device& device) {
@@ -7182,7 +7194,7 @@ index d29a4bab2..887d4a12e 100644
 +        CREATE_MM(GGML_TYPE_Q4_0_ROCMFP4, pipeline_dequant_mul_mat_mat[GGML_TYPE_Q4_0_ROCMFP4].f32acc, matmul_rocmfp4_f32, , mmq_wg_denoms, warptile_mmq, vk_mat_mat_push_constants, 3, , 0);
 +        CREATE_MM(GGML_TYPE_Q4_0_ROCMFP4_FAST, pipeline_dequant_mul_mat_mat[GGML_TYPE_Q4_0_ROCMFP4_FAST].f32acc, matmul_rocmfp4_fast_f32, , mmq_wg_denoms, warptile_mmq, vk_mat_mat_push_constants, 3, , 0);
          CREATE_MM(GGML_TYPE_NVFP4,   pipeline_dequant_mul_mat_mat[GGML_TYPE_NVFP4].f32acc,   matmul_nvfp4_f32,   , mmq_wg_denoms, warptile_mmq, vk_mat_mat_push_constants, 3, , 0);
-
+ 
  #if defined(GGML_VULKAN_INTEGER_DOT_GLSLC_SUPPORT)
 @@ -4213,6 +4252,8 @@ static void ggml_vk_load_shaders(vk_device& device) {
              CREATE_MM(GGML_TYPE_IQ4_XS,  pipeline_dequant_mul_mat_mat_id[GGML_TYPE_IQ4_XS].f32acc,  matmul_id_subgroup_iq4_xs_f32,  , mmq_wg_denoms, warptile_mmqid, vk_mat_mat_id_push_constants, mul_mat_id_param_count, _id, mul_mat_subgroup_size);
@@ -7209,7 +7221,7 @@ index d29a4bab2..887d4a12e 100644
 +            ggml_vk_create_pipeline(device, device->pipeline_dequant_mul_mat_vec_f32_f32[w][GGML_TYPE_Q4_0_ROCMFP4][i], "mul_mat_vec_rocmfp4_f32_f32", arr_dmmv_rocmfp4_f32_f32_len[reduc16], arr_dmmv_rocmfp4_f32_f32_data[reduc16], "main", mul_mat_vec_num_bindings, sizeof(vk_mat_vec_push_constants), {rm_iq, 1, 1}, {wg_size_subgroup16, rm_iq, i+1}, 1, true, use_subgroups16, force_subgroup_size16);
 +            ggml_vk_create_pipeline(device, device->pipeline_dequant_mul_mat_vec_f32_f32[w][GGML_TYPE_Q4_0_ROCMFP4_FAST][i], "mul_mat_vec_rocmfp4_fast_f32_f32", arr_dmmv_rocmfp4_fast_f32_f32_len[reduc16], arr_dmmv_rocmfp4_fast_f32_f32_data[reduc16], "main", mul_mat_vec_num_bindings, sizeof(vk_mat_vec_push_constants), {rm_iq, 1, 1}, {wg_size_subgroup16, rm_iq, i+1}, 1, true, use_subgroups16, force_subgroup_size16);
              ggml_vk_create_pipeline(device, device->pipeline_dequant_mul_mat_vec_f32_f32[w][GGML_TYPE_NVFP4][i],   "mul_mat_vec_nvfp4_f32_f32",   arr_dmmv_nvfp4_f32_f32_len[reduc16],   arr_dmmv_nvfp4_f32_f32_data[reduc16],   "main", mul_mat_vec_num_bindings, sizeof(vk_mat_vec_push_constants), {rm_iq, 1, 1}, {wg_size_subgroup16, rm_iq, i+1}, 1, true, use_subgroups16, force_subgroup_size16);
-
+ 
              ggml_vk_create_pipeline(device, device->pipeline_dequant_mul_mat_vec_f16_f32[w][GGML_TYPE_F32 ][i], "mul_mat_vec_f32_f16_f32",  arr_dmmv_f32_f16_f32_len[reduc],  arr_dmmv_f32_f16_f32_data[reduc],  "main", mul_mat_vec_num_bindings, sizeof(vk_mat_vec_push_constants), {1, 1, 1}, {wg_size_subgroup, 1, i+1}, 1, false, use_subgroups, force_subgroup_size);
 @@ -4361,6 +4406,8 @@ static void ggml_vk_load_shaders(vk_device& device) {
              ggml_vk_create_pipeline(device, device->pipeline_dequant_mul_mat_vec_f16_f32[w][GGML_TYPE_IQ4_XS][i],  "mul_mat_vec_iq4_xs_f16_f32",  arr_dmmv_iq4_xs_f16_f32_len[reduc16],  arr_dmmv_iq4_xs_f16_f32_data[reduc16],  "main", mul_mat_vec_num_bindings, sizeof(vk_mat_vec_push_constants), {rm_iq, 1, 1}, {wg_size_subgroup16, rm_iq, i+1}, 1, true, use_subgroups16, force_subgroup_size16);
@@ -7218,15 +7230,15 @@ index d29a4bab2..887d4a12e 100644
 +            ggml_vk_create_pipeline(device, device->pipeline_dequant_mul_mat_vec_f16_f32[w][GGML_TYPE_Q4_0_ROCMFP4][i], "mul_mat_vec_rocmfp4_f16_f32", arr_dmmv_rocmfp4_f16_f32_len[reduc16], arr_dmmv_rocmfp4_f16_f32_data[reduc16], "main", mul_mat_vec_num_bindings, sizeof(vk_mat_vec_push_constants), {rm_iq, 1, 1}, {wg_size_subgroup16, rm_iq, i+1}, 1, true, use_subgroups16, force_subgroup_size16);
 +            ggml_vk_create_pipeline(device, device->pipeline_dequant_mul_mat_vec_f16_f32[w][GGML_TYPE_Q4_0_ROCMFP4_FAST][i], "mul_mat_vec_rocmfp4_fast_f16_f32", arr_dmmv_rocmfp4_fast_f16_f32_len[reduc16], arr_dmmv_rocmfp4_fast_f16_f32_data[reduc16], "main", mul_mat_vec_num_bindings, sizeof(vk_mat_vec_push_constants), {rm_iq, 1, 1}, {wg_size_subgroup16, rm_iq, i+1}, 1, true, use_subgroups16, force_subgroup_size16);
              ggml_vk_create_pipeline(device, device->pipeline_dequant_mul_mat_vec_f16_f32[w][GGML_TYPE_NVFP4][i],   "mul_mat_vec_nvfp4_f16_f32",   arr_dmmv_nvfp4_f16_f32_len[reduc16],   arr_dmmv_nvfp4_f16_f32_data[reduc16],   "main", mul_mat_vec_num_bindings, sizeof(vk_mat_vec_push_constants), {rm_iq, 1, 1}, {wg_size_subgroup16, rm_iq, i+1}, 1, true, use_subgroups16, force_subgroup_size16);
-
+ 
  #if defined(GGML_VULKAN_INTEGER_DOT_GLSLC_SUPPORT)
 @@ -4375,6 +4422,8 @@ static void ggml_vk_load_shaders(vk_device& device) {
                  ggml_vk_create_pipeline(device, device->pipeline_dequant_mul_mat_vec_q8_1_f32[w][GGML_TYPE_Q8_0][i], "mul_mat_vec_q8_0_q8_1_f32", arr_dmmv_q8_0_q8_1_f32_len[reduc], arr_dmmv_q8_0_q8_1_f32_data[reduc], "main", mul_mat_vec_num_bindings, sizeof(vk_mat_vec_push_constants), {1*rm_stdq_int, 1, 1}, {wg_size_subgroup_int, 1*rm_stdq_int, i+1}, 1, true, use_subgroups, subgroup_size_int);
-
+ 
                  ggml_vk_create_pipeline(device, device->pipeline_dequant_mul_mat_vec_q8_1_f32[w][GGML_TYPE_MXFP4][i], "mul_mat_vec_mxfp4_q8_1_f32", arr_dmmv_mxfp4_q8_1_f32_len[reduc], arr_dmmv_mxfp4_q8_1_f32_data[reduc], "main", mul_mat_vec_num_bindings, sizeof(vk_mat_vec_push_constants), {2*rm_stdq_int, 1, 1}, {wg_size_subgroup_int, 2*rm_stdq_int, i+1}, 1, true, use_subgroups, subgroup_size_int);
 +                ggml_vk_create_pipeline(device, device->pipeline_dequant_mul_mat_vec_q8_1_f32[w][GGML_TYPE_Q4_0_ROCMFP4][i], "mul_mat_vec_rocmfp4_q8_1_f32", arr_dmmv_rocmfp4_q8_1_f32_len[reduc], arr_dmmv_rocmfp4_q8_1_f32_data[reduc], "main", mul_mat_vec_num_bindings, sizeof(vk_mat_vec_push_constants), {2*rm_stdq_int, 1, 1}, {wg_size_subgroup_int, 2*rm_stdq_int, i+1}, 1, true, use_subgroups, subgroup_size_int);
 +                ggml_vk_create_pipeline(device, device->pipeline_dequant_mul_mat_vec_q8_1_f32[w][GGML_TYPE_Q4_0_ROCMFP4_FAST][i], "mul_mat_vec_rocmfp4_fast_q8_1_f32", arr_dmmv_rocmfp4_fast_q8_1_f32_len[reduc], arr_dmmv_rocmfp4_fast_q8_1_f32_data[reduc], "main", mul_mat_vec_num_bindings, sizeof(vk_mat_vec_push_constants), {2*rm_stdq_int, 1, 1}, {wg_size_subgroup_int, 2*rm_stdq_int, i+1}, 1, true, use_subgroups, subgroup_size_int);
-
+ 
                  ggml_vk_create_pipeline(device, device->pipeline_dequant_mul_mat_vec_q8_1_f32[w][GGML_TYPE_Q2_K][i], "mul_mat_vec_q2_k_q8_1_f32", arr_dmmv_q2_k_q8_1_f32_len[reduc], arr_dmmv_q2_k_q8_1_f32_data[reduc], "main", mul_mat_vec_num_bindings, sizeof(vk_mat_vec_push_constants), {2*rm_kq_int, 1, 1}, {wg_size_subgroup_int, 2*rm_kq_int, i+1}, 1, true, use_subgroups, subgroup_size_int);
                  ggml_vk_create_pipeline(device, device->pipeline_dequant_mul_mat_vec_q8_1_f32[w][GGML_TYPE_Q3_K][i], "mul_mat_vec_q3_k_q8_1_f32", arr_dmmv_q3_k_q8_1_f32_len[reduc], arr_dmmv_q3_k_q8_1_f32_data[reduc], "main", mul_mat_vec_num_bindings, sizeof(vk_mat_vec_push_constants), {1*rm_kq_int, 1, 1}, {wg_size_subgroup_int, 1*rm_kq_int, i+1}, 1, true, use_subgroups, subgroup_size_int);
 @@ -4413,6 +4462,8 @@ static void ggml_vk_load_shaders(vk_device& device) {
@@ -7236,15 +7248,15 @@ index d29a4bab2..887d4a12e 100644
 +        ggml_vk_create_pipeline(device, device->pipeline_dequant_mul_mat_vec_id_f32[w][GGML_TYPE_Q4_0_ROCMFP4], "mul_mat_vec_id_rocmfp4_f32", arr_dmmv_id_rocmfp4_f32_f32_len[reduc16], arr_dmmv_id_rocmfp4_f32_f32_data[reduc16], "main", mul_mat_vec_id_num_bindings, sizeof(vk_mat_vec_id_push_constants), {rm_iq, 1, 1}, {wg_size_subgroup16, rm_iq}, 1, true, use_subgroups16, force_subgroup_size16);
 +        ggml_vk_create_pipeline(device, device->pipeline_dequant_mul_mat_vec_id_f32[w][GGML_TYPE_Q4_0_ROCMFP4_FAST], "mul_mat_vec_id_rocmfp4_fast_f32", arr_dmmv_id_rocmfp4_fast_f32_f32_len[reduc16], arr_dmmv_id_rocmfp4_fast_f32_f32_data[reduc16], "main", mul_mat_vec_id_num_bindings, sizeof(vk_mat_vec_id_push_constants), {rm_iq, 1, 1}, {wg_size_subgroup16, rm_iq}, 1, true, use_subgroups16, force_subgroup_size16);
          ggml_vk_create_pipeline(device, device->pipeline_dequant_mul_mat_vec_id_f32[w][GGML_TYPE_NVFP4],   "mul_mat_vec_id_nvfp4_f32",   arr_dmmv_id_nvfp4_f32_f32_len[reduc16],   arr_dmmv_id_nvfp4_f32_f32_data[reduc16],   "main", mul_mat_vec_id_num_bindings, sizeof(vk_mat_vec_id_push_constants), {rm_iq, 1, 1}, {wg_size_subgroup16, rm_iq}, 1, true, use_subgroups16, force_subgroup_size16);
-
+ 
  #if defined(GGML_VULKAN_INTEGER_DOT_GLSLC_SUPPORT)
 @@ -4427,6 +4478,8 @@ static void ggml_vk_load_shaders(vk_device& device) {
              ggml_vk_create_pipeline(device, device->pipeline_dequant_mul_mat_vec_id_q8_1_f32[w][GGML_TYPE_Q8_0], "mul_mat_vec_id_q8_0_q8_1_f32", arr_dmmv_id_q8_0_q8_1_f32_len[reduc], arr_dmmv_id_q8_0_q8_1_f32_data[reduc], "main", mul_mat_vec_id_num_bindings, sizeof(vk_mat_vec_id_push_constants), {1*rm_stdq_int, 1, 1}, {wg_size_subgroup_int, 1*rm_stdq_int}, 1, true, use_subgroups, subgroup_size_int);
-
+ 
              ggml_vk_create_pipeline(device, device->pipeline_dequant_mul_mat_vec_id_q8_1_f32[w][GGML_TYPE_MXFP4], "mul_mat_vec_id_mxfp4_q8_1_f32", arr_dmmv_id_mxfp4_q8_1_f32_len[reduc], arr_dmmv_id_mxfp4_q8_1_f32_data[reduc], "main", mul_mat_vec_id_num_bindings, sizeof(vk_mat_vec_id_push_constants), {2*rm_stdq_int, 1, 1}, {wg_size_subgroup_int, 2*rm_stdq_int}, 1, true, use_subgroups, subgroup_size_int);
 +            ggml_vk_create_pipeline(device, device->pipeline_dequant_mul_mat_vec_id_q8_1_f32[w][GGML_TYPE_Q4_0_ROCMFP4], "mul_mat_vec_id_rocmfp4_q8_1_f32", arr_dmmv_id_rocmfp4_q8_1_f32_len[reduc], arr_dmmv_id_rocmfp4_q8_1_f32_data[reduc], "main", mul_mat_vec_id_num_bindings, sizeof(vk_mat_vec_id_push_constants), {2*rm_stdq_int, 1, 1}, {wg_size_subgroup_int, 2*rm_stdq_int}, 1, true, use_subgroups, subgroup_size_int);
 +            ggml_vk_create_pipeline(device, device->pipeline_dequant_mul_mat_vec_id_q8_1_f32[w][GGML_TYPE_Q4_0_ROCMFP4_FAST], "mul_mat_vec_id_rocmfp4_fast_q8_1_f32", arr_dmmv_id_rocmfp4_fast_q8_1_f32_len[reduc], arr_dmmv_id_rocmfp4_fast_q8_1_f32_data[reduc], "main", mul_mat_vec_id_num_bindings, sizeof(vk_mat_vec_id_push_constants), {2*rm_stdq_int, 1, 1}, {wg_size_subgroup_int, 2*rm_stdq_int}, 1, true, use_subgroups, subgroup_size_int);
-
+ 
              ggml_vk_create_pipeline(device, device->pipeline_dequant_mul_mat_vec_id_q8_1_f32[w][GGML_TYPE_Q2_K], "mul_mat_vec_id_q2_k_q8_1_f32", arr_dmmv_id_q2_k_q8_1_f32_len[reduc], arr_dmmv_id_q2_k_q8_1_f32_data[reduc], "main", mul_mat_vec_id_num_bindings, sizeof(vk_mat_vec_id_push_constants), {2*rm_kq_int, 1, 1}, {wg_size_subgroup_int, 2*rm_kq_int}, 1, true, use_subgroups, subgroup_size_int);
              ggml_vk_create_pipeline(device, device->pipeline_dequant_mul_mat_vec_id_q8_1_f32[w][GGML_TYPE_Q3_K], "mul_mat_vec_id_q3_k_q8_1_f32", arr_dmmv_id_q3_k_q8_1_f32_len[reduc], arr_dmmv_id_q3_k_q8_1_f32_data[reduc], "main", mul_mat_vec_id_num_bindings, sizeof(vk_mat_vec_id_push_constants), {1*rm_kq_int, 1, 1}, {wg_size_subgroup_int, 1*rm_kq_int}, 1, true, use_subgroups, subgroup_size_int);
 @@ -4469,6 +4522,8 @@ static void ggml_vk_load_shaders(vk_device& device) {
@@ -7254,7 +7266,7 @@ index d29a4bab2..887d4a12e 100644
 +    ggml_vk_create_pipeline(device, device->pipeline_dequant[GGML_TYPE_Q4_0_ROCMFP4], "dequant_rocmfp4", dequant_rocmfp4_len, dequant_rocmfp4_data, "main", 2, 5 * sizeof(uint32_t), {256 * 16, 1, 1}, {}, 1);
 +    ggml_vk_create_pipeline(device, device->pipeline_dequant[GGML_TYPE_Q4_0_ROCMFP4_FAST], "dequant_rocmfp4_fast", dequant_rocmfp4_fast_len, dequant_rocmfp4_fast_data, "main", 2, 5 * sizeof(uint32_t), {256 * 16, 1, 1}, {}, 1);
      ggml_vk_create_pipeline(device, device->pipeline_dequant[GGML_TYPE_NVFP4],   "dequant_nvfp4",   dequant_nvfp4_len,   dequant_nvfp4_data,   "main", 2, 5 * sizeof(uint32_t), {256 * 16, 1, 1}, {}, 1);
-
+ 
      // get_rows
 @@ -4496,6 +4551,8 @@ static void ggml_vk_load_shaders(vk_device& device) {
      ggml_vk_create_pipeline(device, device->pipeline_get_rows[GGML_TYPE_IQ4_XS],  "get_rows_iq4_xs",  get_rows_iq4_xs_len,  get_rows_iq4_xs_data,  "main", 3, sizeof(vk_op_binary_push_constants), {1024, 1, 1}, {}, 1);
@@ -7264,7 +7276,7 @@ index d29a4bab2..887d4a12e 100644
 +    ggml_vk_create_pipeline(device, device->pipeline_get_rows[GGML_TYPE_Q4_0_ROCMFP4_FAST], "get_rows_rocmfp4_fast", get_rows_rocmfp4_fast_len, get_rows_rocmfp4_fast_data, "main", 3, sizeof(vk_op_binary_push_constants), {1024, 1, 1}, {}, 1);
      ggml_vk_create_pipeline(device, device->pipeline_get_rows[GGML_TYPE_NVFP4],   "get_rows_nvfp4",   get_rows_nvfp4_len,   get_rows_nvfp4_data,   "main", 3, sizeof(vk_op_binary_push_constants), {1024, 1, 1}, {}, 1);
      ggml_vk_create_pipeline(device, device->pipeline_get_rows[GGML_TYPE_I32],     "get_rows_i32",     get_rows_i32_len,     get_rows_i32_data,     "main", 3, sizeof(vk_op_binary_push_constants), {1024, 1, 1}, {}, 1);
-
+ 
 @@ -4523,6 +4580,8 @@ static void ggml_vk_load_shaders(vk_device& device) {
      ggml_vk_create_pipeline(device, device->pipeline_get_rows_f32[GGML_TYPE_IQ4_XS],  "get_rows_iq4_xs_f32",  get_rows_iq4_xs_f32_len,  get_rows_iq4_xs_f32_data,  "main", 3, sizeof(vk_op_binary_push_constants), {1024, 1, 1}, {}, 1);
      ggml_vk_create_pipeline(device, device->pipeline_get_rows_f32[GGML_TYPE_IQ4_NL],  "get_rows_iq4_nl_f32",  get_rows_iq4_nl_f32_len,  get_rows_iq4_nl_f32_data,  "main", 3, sizeof(vk_op_binary_push_constants), {1024, 1, 1}, {}, 1);
@@ -7272,19 +7284,19 @@ index d29a4bab2..887d4a12e 100644
 +    ggml_vk_create_pipeline(device, device->pipeline_get_rows_f32[GGML_TYPE_Q4_0_ROCMFP4], "get_rows_rocmfp4_f32", get_rows_rocmfp4_f32_len, get_rows_rocmfp4_f32_data, "main", 3, sizeof(vk_op_binary_push_constants), {1024, 1, 1}, {}, 1);
 +    ggml_vk_create_pipeline(device, device->pipeline_get_rows_f32[GGML_TYPE_Q4_0_ROCMFP4_FAST], "get_rows_rocmfp4_fast_f32", get_rows_rocmfp4_fast_f32_len, get_rows_rocmfp4_fast_f32_data, "main", 3, sizeof(vk_op_binary_push_constants), {1024, 1, 1}, {}, 1);
      ggml_vk_create_pipeline(device, device->pipeline_get_rows_f32[GGML_TYPE_NVFP4],   "get_rows_nvfp4_f32",   get_rows_nvfp4_f32_len,   get_rows_nvfp4_f32_data,   "main", 3, sizeof(vk_op_binary_push_constants), {1024, 1, 1}, {}, 1);
-
+ 
      ggml_vk_create_pipeline(device, device->pipeline_matmul_split_k_reduce, "split_k_reduce", split_k_reduce_len, split_k_reduce_data, "main", 2, 2 * sizeof(uint32_t), {256 * 4, 1, 1}, {}, 1);
 @@ -4579,9 +4638,12 @@ static void ggml_vk_load_shaders(vk_device& device) {
      ggml_vk_create_pipeline(device, device->pipeline_contig_cpy_f32_bf16,"contig_cpy_f32_bf16",contig_cpy_f32_bf16_len,contig_cpy_f32_bf16_data,"main", 2, sizeof(vk_op_unary_push_constants), {512, 1, 1}, {}, 1);
      ggml_vk_create_pipeline(device, device->pipeline_contig_cpy_i32_f32, "contig_cpy_i32_f32", contig_cpy_i32_f32_len, contig_cpy_i32_f32_data, "main", 2, sizeof(vk_op_unary_push_constants), {512, 1, 1}, {}, 1);
      ggml_vk_create_pipeline(device, device->pipeline_contig_cpy_f32_i32, "contig_cpy_f32_i32", contig_cpy_f32_i32_len, contig_cpy_f32_i32_data, "main", 2, sizeof(vk_op_unary_push_constants), {512, 1, 1}, {}, 1);
 +    ggml_vk_create_pipeline(device, device->pipeline_contig_cpy_u8_u8, "contig_cpy_u8_u8", contig_cpy_u8_u8_len, contig_cpy_u8_u8_data, "main", 2, sizeof(vk_op_unary_push_constants), {512, 1, 1}, {}, 1);
-
+ 
      ggml_vk_create_pipeline(device, device->pipeline_cpy_transpose_32, "cpy_transpose_32", cpy_transpose_32_len, cpy_transpose_32_data, "main", 2, sizeof(vk_op_unary_push_constants), {1, 1, 1}, {}, 1);
      ggml_vk_create_pipeline(device, device->pipeline_cpy_transpose_16, "cpy_transpose_16", cpy_transpose_16_len, cpy_transpose_16_data, "main", 2, sizeof(vk_op_unary_push_constants), {1, 1, 1}, {}, 1);
 +    ggml_vk_create_pipeline(device, device->pipeline_cpy_rocmfp4_rocmfp4, "cpy_rocmfp4_rocmfp4", cpy_rocmfp4_rocmfp4_len, cpy_rocmfp4_rocmfp4_data, "main", 2, sizeof(vk_op_unary_push_constants), {128, 1, 1}, {}, 1);
 +    ggml_vk_create_pipeline(device, device->pipeline_cpy_rocmfp4_fast_rocmfp4_fast, "cpy_rocmfp4_fast_rocmfp4_fast", cpy_rocmfp4_fast_rocmfp4_fast_len, cpy_rocmfp4_fast_rocmfp4_fast_data, "main", 2, sizeof(vk_op_unary_push_constants), {128, 1, 1}, {}, 1);
-
+ 
      ggml_vk_create_pipeline(device, device->pipeline_cpy_f32_quant[GGML_TYPE_Q1_0], "cpy_f32_q1_0", cpy_f32_q1_0_len, cpy_f32_q1_0_data, "main", 2, sizeof(vk_op_unary_push_constants), {32, 1, 1}, {}, 1);
      ggml_vk_create_pipeline(device, device->pipeline_cpy_f32_quant[GGML_TYPE_Q4_0], "cpy_f32_q4_0", cpy_f32_q4_0_len, cpy_f32_q4_0_data, "main", 2, sizeof(vk_op_unary_push_constants), {32, 1, 1}, {}, 1);
 @@ -4590,6 +4652,12 @@ static void ggml_vk_load_shaders(vk_device& device) {
@@ -7297,7 +7309,7 @@ index d29a4bab2..887d4a12e 100644
 +    ggml_vk_create_pipeline(device, device->pipeline_cpy_f16_quant[GGML_TYPE_Q4_0_ROCMFP4_FAST], "cpy_f16_rocmfp4_fast", cpy_f16_rocmfp4_fast_len, cpy_f16_rocmfp4_fast_data, "main", 2, sizeof(vk_op_unary_push_constants), {32, 1, 1}, {}, 1);
 +    ggml_vk_create_pipeline(device, device->pipeline_cpy_bf16_quant[GGML_TYPE_Q4_0_ROCMFP4], "cpy_bf16_rocmfp4", cpy_bf16_rocmfp4_len, cpy_bf16_rocmfp4_data, "main", 2, sizeof(vk_op_unary_push_constants), {32, 1, 1}, {}, 1);
 +    ggml_vk_create_pipeline(device, device->pipeline_cpy_bf16_quant[GGML_TYPE_Q4_0_ROCMFP4_FAST], "cpy_bf16_rocmfp4_fast", cpy_bf16_rocmfp4_fast_len, cpy_bf16_rocmfp4_fast_data, "main", 2, sizeof(vk_op_unary_push_constants), {32, 1, 1}, {}, 1);
-
+ 
  #define SET_ROWS(itype) \
          ggml_vk_create_pipeline(device, device->pipeline_set_rows ## itype [GGML_TYPE_F32],  "set_rows_f32" #itype,  set_rows_f32 ## itype ## _len,  set_rows_f32 ## itype ## _data,  "main", 3, sizeof(vk_op_binary_push_constants), {1, 1, 1}, {1}, 1, true); \
 @@ -4601,7 +4669,9 @@ static void ggml_vk_load_shaders(vk_device& device) {
@@ -7308,7 +7320,7 @@ index d29a4bab2..887d4a12e 100644
 +        ggml_vk_create_pipeline(device, device->pipeline_set_rows ## itype [GGML_TYPE_IQ4_NL], "set_rows_iq4_nl" #itype, set_rows_iq4_nl ## itype ## _len, set_rows_iq4_nl ## itype ## _data, "main", 3, sizeof(vk_op_binary_push_constants), {1, 1, 1}, {1}, 1, true); \
 +        ggml_vk_create_pipeline(device, device->pipeline_set_rows ## itype [GGML_TYPE_Q4_0_ROCMFP4], "set_rows_rocmfp4" #itype, set_rows_rocmfp4 ## itype ## _len, set_rows_rocmfp4 ## itype ## _data, "main", 3, sizeof(vk_op_binary_push_constants), {1, 1, 1}, {1}, 1, true); \
 +        ggml_vk_create_pipeline(device, device->pipeline_set_rows ## itype [GGML_TYPE_Q4_0_ROCMFP4_FAST], "set_rows_rocmfp4_fast" #itype, set_rows_rocmfp4_fast ## itype ## _len, set_rows_rocmfp4_fast ## itype ## _data, "main", 3, sizeof(vk_op_binary_push_constants), {1, 1, 1}, {1}, 1, true);
-
+ 
      SET_ROWS(_i32)
      SET_ROWS(_i64)
 @@ -4615,6 +4685,8 @@ static void ggml_vk_load_shaders(vk_device& device) {
@@ -7317,7 +7329,7 @@ index d29a4bab2..887d4a12e 100644
      ggml_vk_create_pipeline(device, device->pipeline_cpy_quant_f32[GGML_TYPE_IQ4_NL], "cpy_iq4_nl_f32", cpy_iq4_nl_f32_len, cpy_iq4_nl_f32_data, "main", 2, sizeof(vk_op_unary_push_constants), {(uint32_t)ggml_blck_size(GGML_TYPE_IQ4_NL), 1, 1}, {}, 1);
 +    ggml_vk_create_pipeline(device, device->pipeline_cpy_quant_f32[GGML_TYPE_Q4_0_ROCMFP4], "cpy_rocmfp4_f32", cpy_rocmfp4_f32_len, cpy_rocmfp4_f32_data, "main", 2, sizeof(vk_op_unary_push_constants), {(uint32_t)ggml_blck_size(GGML_TYPE_Q4_0_ROCMFP4), 1, 1}, {}, 1);
 +    ggml_vk_create_pipeline(device, device->pipeline_cpy_quant_f32[GGML_TYPE_Q4_0_ROCMFP4_FAST], "cpy_rocmfp4_fast_f32", cpy_rocmfp4_fast_f32_len, cpy_rocmfp4_fast_f32_data, "main", 2, sizeof(vk_op_unary_push_constants), {(uint32_t)ggml_blck_size(GGML_TYPE_Q4_0_ROCMFP4_FAST), 1, 1}, {}, 1);
-
+ 
      auto get_suffix = [](bool src0_f16, bool src1_f16, bool dst_f16) {
          std::string s;
 @@ -6277,6 +6349,8 @@ static vk_pipeline ggml_vk_get_to_fp16(ggml_backend_vk_context * ctx, ggml_type
@@ -7412,7 +7424,7 @@ index d29a4bab2..887d4a12e 100644
 +            break;
 +        }
 +    }
-
+ 
      if (to == GGML_TYPE_F32) {
          switch (src->type) {
 @@ -7577,6 +7683,8 @@ static vk_pipeline ggml_vk_get_cpy_pipeline(ggml_backend_vk_context * ctx, const
@@ -7426,7 +7438,7 @@ index d29a4bab2..887d4a12e 100644
              break;
 @@ -7584,6 +7692,19 @@ static vk_pipeline ggml_vk_get_cpy_pipeline(ggml_backend_vk_context * ctx, const
      }
-
+ 
      if (src->type == to) {
 +        if (to == GGML_TYPE_Q4_0_ROCMFP4) {
 +            if (contig) {
@@ -7445,7 +7457,7 @@ index d29a4bab2..887d4a12e 100644
          // For quantized types, we scale by block size/type size. But
          // this path is also used for bf16->bf16 for example, where the
 @@ -7975,6 +8096,8 @@ static bool ggml_vk_should_use_mmvq(const vk_device& device, uint32_t m, uint32_
-
+ 
          switch (src0_type) {
          case GGML_TYPE_MXFP4:
 +        case GGML_TYPE_Q4_0_ROCMFP4:
@@ -7455,7 +7467,7 @@ index d29a4bab2..887d4a12e 100644
          default:
 @@ -10050,8 +10173,25 @@ static vk_pipeline ggml_vk_op_get_pipeline(ggml_backend_vk_context * ctx, const
  }
-
+ 
  template <> void init_pushconst_tensor_offsets(ggml_backend_vk_context * ctx, vk_op_unary_push_constants &p, const ggml_tensor * src0, const ggml_tensor * src1, const ggml_tensor * src2, const ggml_tensor * src3, ggml_tensor * dst) {
 -    const uint32_t a_offset = get_misalign_bytes(ctx, src0) / ggml_type_size(src0->type);
 -    const uint32_t d_offset = get_misalign_bytes(ctx, dst) / ggml_type_size(dst->type);
@@ -7478,9 +7490,9 @@ index d29a4bab2..887d4a12e 100644
 +        a_offset = get_misalign_bytes(ctx, src0);
 +        d_offset = get_misalign_bytes(ctx, dst);
 +    }
-
+ 
      p.misalign_offsets = (a_offset << 16) | d_offset;
-
+ 
 @@ -10350,16 +10490,26 @@ static void ggml_vk_op_f32(ggml_backend_vk_context * ctx, vk_context& subctx, co
      case GGML_OP_UPSCALE:
      case GGML_OP_UNARY:
@@ -7541,7 +7553,7 @@ index d29a4bab2..887d4a12e 100644
 +            }
          }
      }
-
+ 
 @@ -15695,6 +15854,8 @@ static bool ggml_backend_vk_device_supports_op(ggml_backend_dev_t dev, const ggm
                      case GGML_TYPE_IQ4_XS:
                      case GGML_TYPE_IQ4_NL:
@@ -7608,7 +7620,7 @@ index d29a4bab2..887d4a12e 100644
 @@ -15872,6 +16052,16 @@ static bool ggml_backend_vk_device_supports_op(ggml_backend_dev_t dev, const ggm
                      return true;
                  }
-
+ 
 +                if (src0_type == GGML_TYPE_Q4_0_ROCMFP4_FAST &&
 +                    src1_type == GGML_TYPE_Q4_0_ROCMFP4_FAST) {
 +                    return op->src[0]->ne[0] % ggml_blck_size(src0_type) == 0 && op->ne[0] % ggml_blck_size(src1_type) == 0;
@@ -7629,7 +7641,7 @@ index 6a6921474..f59041340 100644
 @@ -4,7 +4,7 @@
  #include "generic_unary_head.glsl"
  #include "dequant_funcs.glsl"
-
+ 
 -#if defined(DATA_A_IQ4_NL) || defined(DATA_A_MXFP4) || defined(DATA_A_NVFP4)
 +#if defined(DATA_A_IQ4_NL) || defined(DATA_A_MXFP4) || defined(DATA_A_ROCMFP4) || defined(DATA_A_ROCMFP4_FAST) || defined(DATA_A_NVFP4)
  // 16 invocations needed for init_iq_shmem
@@ -7703,7 +7715,7 @@ index 710c15296..0d4b1d468 100644
 @@ -10,7 +10,19 @@ layout(local_size_x = 32, local_size_y = 1, local_size_z = 1) in;
  const uint BLOCK_SIZE = 32;
  #endif
-
+ 
 -layout (binding = 0) readonly buffer S {float data_s[];};
 +#if !defined(S_TYPE)
 +#define S_TYPE float
@@ -7718,12 +7730,12 @@ index 710c15296..0d4b1d468 100644
 +    return float(data_s[idx]);
 +#endif
 +}
-
+ 
  #if defined(SET_ROWS)
  #include "generic_binary_head.glsl"
 @@ -35,7 +47,7 @@ void quantize(uint dst_idx, uint src_idx)
      float vmax = 0.0;
-
+ 
      [[unroll]] for (int j = 0; j < QUANT_K_Q4_0; ++j) {
 -        const float v = data_s[src_idx + j];
 +        const float v = load_s(src_idx + j);
@@ -7732,38 +7744,38 @@ index 710c15296..0d4b1d468 100644
              vmax = v;
 @@ -48,8 +60,8 @@ void quantize(uint dst_idx, uint src_idx)
      data_q[dst_idx].d = float16_t(d);
-
+ 
      [[unroll]] for (int j = 0; j < QUANT_K_Q4_0/2; ++j) {
 -        const float x0 = data_s[src_idx + 0              + j]*id;
 -        const float x1 = data_s[src_idx + QUANT_K_Q4_0/2 + j]*id;
 +        const float x0 = load_s(src_idx + 0              + j)*id;
 +        const float x1 = load_s(src_idx + QUANT_K_Q4_0/2 + j)*id;
-
+ 
          const uint xi0 = min(15, int(x0 + 8.5));
          const uint xi1 = min(15, int(x1 + 8.5));
 @@ -66,7 +78,7 @@ void quantize(uint dst_idx, uint src_idx)
      float vmax = -vmin;
-
+ 
      [[unroll]] for (int j = 0; j < QUANT_K_Q4_1; ++j) {
 -        const float v = data_s[src_idx + j];
 +        const float v = load_s(src_idx + j);
-
+ 
          if (v < vmin) vmin = v;
          if (v > vmax) vmax = v;
 @@ -79,8 +91,8 @@ void quantize(uint dst_idx, uint src_idx)
      data_q[dst_idx].m = float16_t(vmin);
-
+ 
      [[unroll]] for (int j = 0; j < QUANT_K_Q4_1/2; ++j) {
 -        const float x0 = (data_s[src_idx + 0              + j] - vmin)*id;
 -        const float x1 = (data_s[src_idx + QUANT_K_Q4_1/2 + j] - vmin)*id;
 +        const float x0 = (load_s(src_idx + 0              + j) - vmin)*id;
 +        const float x1 = (load_s(src_idx + QUANT_K_Q4_1/2 + j) - vmin)*id;
-
+ 
          const uint xi0 = min(15, int(x0 + 0.5));
          const uint xi1 = min(15, int(x1 + 0.5));
 @@ -97,7 +109,7 @@ void quantize(uint dst_idx, uint src_idx)
      float vmax = 0.0;
-
+ 
      [[unroll]] for (int j = 0; j < QUANT_K_Q5_0; ++j) {
 -        const float v = data_s[src_idx + j];
 +        const float v = load_s(src_idx + j);
@@ -7771,14 +7783,14 @@ index 710c15296..0d4b1d468 100644
              amax = abs(v);
              vmax = v;
 @@ -111,8 +123,8 @@ void quantize(uint dst_idx, uint src_idx)
-
+ 
      uint32_t qh = 0;
      [[unroll]] for (int j = 0; j < QUANT_K_Q5_0/2; ++j) {
 -        const float x0 = data_s[src_idx + 0              + j]*id;
 -        const float x1 = data_s[src_idx + QUANT_K_Q5_0/2 + j]*id;
 +        const float x0 = load_s(src_idx + 0              + j)*id;
 +        const float x1 = load_s(src_idx + QUANT_K_Q5_0/2 + j)*id;
-
+ 
          const uint xi0 = min(31, int(x0 + 16.5));
          const uint xi1 = min(31, int(x1 + 16.5));
 @@ -129,11 +141,11 @@ void quantize(uint dst_idx, uint src_idx)
@@ -7788,7 +7800,7 @@ index 710c15296..0d4b1d468 100644
 -    float min = data_s[src_idx + 0];
 +    float min = load_s(src_idx + 0);
      float max = min;
-
+ 
      [[unroll]] for (int j = 1; j < QUANT_K_Q5_1; ++j) {
 -        const float v = data_s[src_idx + j];
 +        const float v = load_s(src_idx + j);
@@ -7796,46 +7808,46 @@ index 710c15296..0d4b1d468 100644
          max = v > max ? v : max;
      }
 @@ -146,8 +158,8 @@ void quantize(uint dst_idx, uint src_idx)
-
+ 
      uint32_t qh = 0;
      [[unroll]] for (int j = 0; j < QUANT_K_Q5_1/2; ++j) {
 -        const float x0 = (data_s[src_idx + 0              + j] - min)*id;
 -        const float x1 = (data_s[src_idx + QUANT_K_Q5_1/2 + j] - min)*id;
 +        const float x0 = (load_s(src_idx + 0              + j) - min)*id;
 +        const float x1 = (load_s(src_idx + QUANT_K_Q5_1/2 + j) - min)*id;
-
+ 
          const uint xi0 = uint(x0 + 0.5);
          const uint xi1 = uint(x1 + 0.5);
 @@ -166,7 +178,7 @@ void quantize(uint dst_idx, uint src_idx)
      float amax = 0.0; // absolute max
-
+ 
      [[unroll]] for (int j = 0; j < QUANT_K_Q8_0; j++) {
 -        const float v = data_s[src_idx + j];
 +        const float v = load_s(src_idx + j);
          amax = max(amax, abs(v));
      }
-
+ 
 @@ -176,7 +188,7 @@ void quantize(uint dst_idx, uint src_idx)
      data_q[dst_idx].d = float16_t(d);
-
+ 
      [[unroll]] for (int j = 0; j < QUANT_K_Q8_0; ++j) {
 -        const float x0 = data_s[src_idx + j]*id;
 +        const float x0 = load_s(src_idx + j)*id;
-
+ 
          data_q[dst_idx].qs[j] = int8_t(round(x0));
      }
 @@ -189,7 +201,7 @@ void quantize(uint dst_idx, uint src_idx)
      float sum_abs = 0.0;
-
+ 
      [[unroll]] for (int j = 0; j < QUANT_K_Q1_0; j++) {
 -        sum_abs += abs(data_s[src_idx + j]);
 +        sum_abs += abs(load_s(src_idx + j));
      }
-
+ 
      const float d = sum_abs / QUANT_K_Q1_0;
 @@ -201,7 +213,7 @@ void quantize(uint dst_idx, uint src_idx)
      }
-
+ 
      [[unroll]] for (int j = 0; j < QUANT_K_Q1_0; ++j) {
 -        if (data_s[src_idx + j] >= 0.0) {
 +        if (load_s(src_idx + j) >= 0.0) {
@@ -7844,7 +7856,7 @@ index 710c15296..0d4b1d468 100644
      }
 @@ -226,7 +238,7 @@ void quantize(uint dst_idx, uint src_idx)
      float vmax = 0.0;
-
+ 
      [[unroll]] for (int j = 0; j < QUANT_K_IQ4_NL; ++j) {
 -        const float v = data_s[src_idx + j];
 +        const float v = load_s(src_idx + j);
@@ -7852,7 +7864,7 @@ index 710c15296..0d4b1d468 100644
              amax = abs(v);
              vmax = v;
 @@ -238,16 +250,16 @@ void quantize(uint dst_idx, uint src_idx)
-
+ 
      float sumqx = 0, sumq2 = 0;
      [[unroll]] for (int j = 0; j < QUANT_K_IQ4_NL/2; ++j) {
 -        const float x0 = data_s[src_idx + 0                + j]*id;
@@ -7872,11 +7884,11 @@ index 710c15296..0d4b1d468 100644
 +        sumqx += w0*v0*load_s(src_idx + j) + w1*v1*load_s(src_idx + QUANT_K_IQ4_NL/2 + j);
          sumq2 += w0*v0*v0 + w1*v1*v1;
      }
-
+ 
 @@ -256,17 +268,179 @@ void quantize(uint dst_idx, uint src_idx)
  }
  #endif
-
+ 
 +#if defined(DATA_A_ROCMFP4) || defined(DATA_A_ROCMFP4_FAST)
 +float rocmfp4_code_value(uint q) {
 +    switch (q & 0xFu) {
@@ -8046,7 +8058,7 @@ index 710c15296..0d4b1d468 100644
 +    data_q[dst_idx] = A_TYPE(load_s(src_idx));
  }
  #endif
-
+ 
  #if defined(DATA_A_BF16)
  void quantize(uint dst_idx, uint src_idx)
  {
@@ -8054,7 +8066,7 @@ index 710c15296..0d4b1d468 100644
 +    data_q[dst_idx] = A_TYPE(fp32_to_bf16(load_s(src_idx)));
  }
  #endif
-
+ 
 diff --git a/ggml/src/ggml-vulkan/vulkan-shaders/dequant_funcs.glsl b/ggml/src/ggml-vulkan/vulkan-shaders/dequant_funcs.glsl
 index 88d07d2df..ef717bd13 100644
 --- a/ggml/src/ggml-vulkan/vulkan-shaders/dequant_funcs.glsl
@@ -8062,7 +8074,7 @@ index 88d07d2df..ef717bd13 100644
 @@ -450,6 +450,44 @@ vec4 dequantize4(uint ib, uint iqs, uint a_offset) {
  }
  #endif
-
+ 
 +#if defined(DATA_A_ROCMFP4)
 +vec2 dequantize(uint ib, uint iqs, uint a_offset) {
 +    const uint vui = uint(data_a[a_offset + ib].qs[iqs]);
@@ -8107,7 +8119,7 @@ index 88d07d2df..ef717bd13 100644
 @@ -503,6 +541,18 @@ vec2 get_dm(uint ib, uint a_offset) {
  }
  #endif
-
+ 
 +#if defined(DATA_A_ROCMFP4)
 +vec2 get_dm(uint ib, uint a_offset) {
 +    return vec2(1, 0);
@@ -8130,7 +8142,7 @@ index c582aba87..e0ac9d54d 100644
 @@ -697,6 +697,45 @@ float16_t dequantFuncMXFP4(const in decodeBufMXFP4 bl, const in uint blockCoords
  }
  #endif
-
+ 
 +#if defined(DATA_A_ROCMFP4)
 +layout(buffer_reference, std430, buffer_reference_align = 1) buffer decodeBufROCMFP4 {
 +   block_rocmfp4 block;
@@ -8272,12 +8284,12 @@ index 6ac095489..43bfb5d80 100644
 +                const bool rocmfp4_k = (FaTypeK == FA_TYPE_Q4_0_ROCMFP4) || (FaTypeK == FA_TYPE_Q4_0_ROCMFP4_FAST);
 +                const bool rocmfp4_dual_k = FaTypeK == FA_TYPE_Q4_0_ROCMFP4;
 +                const bool block8_fast = (d_per_step == 8) && (FaTypeK != FA_TYPE_Q8_0) && !rocmfp4_k;
-
+ 
                  if (SHMEM_STAGING != 0) {
                      const uint k_block_idx = (d_tid * (HSK_per_thread / 4) + d_block) / 8;
 @@ -413,12 +415,27 @@ void main() {
                      const uint qiqs = (d_tid * (HSK_per_thread / 4) + d_block) % 8;
-
+ 
                      int32_t acc = 0;
 +                    int32_t acc0 = 0;
 +                    int32_t acc1 = 0;
@@ -8294,7 +8306,7 @@ index 6ac095489..43bfb5d80 100644
 +                            acc += dot_qk;
 +                        }
                      }
-
+ 
 -                    Sf[r][c] += ACC_TYPE(acc) * ACC_TYPE(Qf[qib].ds.x) * k_dm.x;
 -                    if ((d_tid * (HSK_per_thread / 4) + d_block) % 8 == 0) {
 +                    if (rocmfp4_dual_k) {
@@ -8316,7 +8328,7 @@ index 9a7957da9..6025183c0 100644
  #define FA_TYPE_Q1_0 41u
 +#define FA_TYPE_Q4_0_ROCMFP4      100u
 +#define FA_TYPE_Q4_0_ROCMFP4_FAST 101u
-
+ 
  // Number of matrix elements per buffer block, derived from the K/V type spec
  // constant. F32 is treated as a vec4 "block" of 4 floats. F16 uses block size 1
 @@ -112,6 +114,9 @@ uint fa_block_elems(uint ty) {
@@ -8350,12 +8362,12 @@ index 02106f33c..56f8aa86d 100644
 +layout (binding = 2) readonly buffer V_PACKED_ROCMFP4 { block_rocmfp4 data[]; } v_packed_rocmfp4;
 +layout (binding = 1) readonly buffer K_PACKED_ROCMFP4_FAST { block_rocmfp4_fast data[]; } k_packed_rocmfp4_fast;
 +layout (binding = 2) readonly buffer V_PACKED_ROCMFP4_FAST { block_rocmfp4_fast data[]; } v_packed_rocmfp4_fast;
-
+ 
  // Q4_1 and Q5_1 packed32 views: aliased to the same memory as the packed16
  // views, used by the MMQ K-side hot path for fast 4-uint loads.
  layout (binding = 1) readonly buffer K_PACKED_Q4_1_P32 { block_q4_1_packed32 data[]; } k_packed_q4_1_p32;
  layout (binding = 1) readonly buffer K_PACKED_Q5_1_P32 { block_q5_1_packed32 data[]; } k_packed_q5_1_p32;
-
+ 
 +int8_t fa_rocmfp4_code_i8(uint q) {
 +    switch (q & 0xFu) {
 +        case  0u: return int8_t(  0);
@@ -8410,7 +8422,7 @@ index 02106f33c..56f8aa86d 100644
 @@ -99,6 +151,37 @@ layout (binding = 1) readonly buffer K_PACKED_Q5_1_P32 { block_q5_1_packed32 dat
      return FLOAT_TYPE(BUF.data[a_offset + ib].d) * FLOAT_TYPEV4(v0.x, v0.y, v1.x, v1.y);          \
  }
-
+ 
 +#define FA_DEQUANT4_ROCMFP4(BUF) {                                                                \
 +    const uint qbase = iqs & 0xFu;                                                                \
 +    uint vui = pack32(u8vec4(BUF.data[a_offset + ib].qs[qbase + 0u],                              \
@@ -8529,7 +8541,7 @@ index 6bf10a7cf..560a66dbe 100644
 +            break;
 +        }
      }
-
+ 
      if (iqs == 0) {
 @@ -101,6 +144,13 @@ void k_block_to_shmem(const uint buf_ib, const uint global_ib, const uint iqs, c
              case FA_TYPE_Q5_0: kblocksh[buf_ib].dm = FLOAT_TYPEV2(FLOAT_TYPE(k_packed_q5_0.data[a_offset + global_ib].d), 0.0); break;
@@ -8561,9 +8573,9 @@ index 6fe3e2dc0..1a0f0ceda 100644
 --- a/ggml/src/ggml-vulkan/vulkan-shaders/mul_mat_vecq.comp
 +++ b/ggml/src/ggml-vulkan/vulkan-shaders/mul_mat_vecq.comp
 @@ -10,7 +10,7 @@
-
+ 
  layout(local_size_x_id = 0, local_size_y = 1, local_size_z = 1) in;
-
+ 
 -#if defined(DATA_A_QUANT_LEGACY) || defined(DATA_A_MXFP4)
 +#if defined(DATA_A_QUANT_LEGACY) || defined(DATA_A_MXFP4) || defined(DATA_A_ROCMFP4) || defined(DATA_A_ROCMFP4_FAST)
  #define K_PER_ITER 8
@@ -8576,7 +8588,7 @@ index bc580aeeb..2d5a18e3b 100644
 @@ -22,6 +22,19 @@ FLOAT_TYPE get_dm(uint ib) {
  }
  #endif
-
+ 
 +#if defined(DATA_A_ROCMFP4)
 +FLOAT_TYPEV2 get_dm(uint ib) {
 +    return FLOAT_TYPEV2(ue4m3_to_fp32(data_a[ib].e[0]), ue4m3_to_fp32(data_a[ib].e[1]));
@@ -8596,7 +8608,7 @@ index bc580aeeb..2d5a18e3b 100644
 @@ -112,8 +125,8 @@ FLOAT_TYPE mul_q8_1(const int32_t q_sum, const float da, const vec2 dsb, const i
  }
  #endif
-
+ 
 -#if defined(DATA_A_MXFP4)
 -// 1-byte loads for mxfp4 blocks (17 bytes)
 +#if defined(DATA_A_MXFP4) || defined(DATA_A_ROCMFP4) || defined(DATA_A_ROCMFP4_FAST)
@@ -8607,7 +8619,7 @@ index bc580aeeb..2d5a18e3b 100644
 @@ -123,8 +136,13 @@ i32vec2 repack(uint ib, uint iqs) {
      const u8vec4 i_a0 = unpack8( qs       & 0x0F0F0F0F);
      const u8vec4 i_a1 = unpack8((qs >> 4) & 0x0F0F0F0F);
-
+ 
 +#if defined(DATA_A_ROCMFP4) || defined(DATA_A_ROCMFP4_FAST)
 +    return i32vec2(pack32(i8vec4(kvalues_rocmfp4[i_a0.x], kvalues_rocmfp4[i_a0.y], kvalues_rocmfp4[i_a0.z], kvalues_rocmfp4[i_a0.w])),
 +                   pack32(i8vec4(kvalues_rocmfp4[i_a1.x], kvalues_rocmfp4[i_a1.y], kvalues_rocmfp4[i_a1.z], kvalues_rocmfp4[i_a1.w])));
@@ -8616,12 +8628,12 @@ index bc580aeeb..2d5a18e3b 100644
                     pack32(i8vec4(kvalues_mxfp4[i_a1.x], kvalues_mxfp4[i_a1.y], kvalues_mxfp4[i_a1.z], kvalues_mxfp4[i_a1.w])));
 +#endif
  }
-
+ 
  FLOAT_TYPE mul_q8_1(const int32_t q_sum, const float da, const vec2 dsb, const int32_t sum_divisor) {
 @@ -132,6 +150,28 @@ FLOAT_TYPE mul_q8_1(const int32_t q_sum, const float da, const vec2 dsb, const i
  }
  #endif
-
+ 
 +#if defined(DATA_A_ROCMFP4_FAST)
 +FLOAT_TYPE mmvq_dot_product(const uint ib_a, const uint iqs) {
 +    const i32vec2 data_a_qs = repack(ib_a, iqs);
@@ -8659,14 +8671,14 @@ index 735951689..f523b95fe 100644
 +#elif defined(DATA_A_MXFP4) || defined(DATA_A_ROCMFP4) || defined(DATA_A_ROCMFP4_FAST)
              const uint idx = pos_a + col * p.stride_a / LOAD_VEC_A + row;
              const uint buf_idx = col * SHMEM_STRIDE + row * LOAD_VEC_A / 4;
-
+ 
              const uint ib = idx / 8;
              const uint iqs = (idx & 0x07) * 2;
-
+ 
 -            const float d = e8m0_to_fp32(data_a[ib].e) * 0.5;
              const uint vui = uint(data_a[ib].qs[iqs]);
              const uint vui2 = uint(data_a[ib].qs[iqs+1]);
-
+ 
 +#if defined(DATA_A_ROCMFP4)
 +            const float d0 = ue4m3_to_fp32(data_a[ib].e[0]);
 +            const float d1 = ue4m3_to_fp32(data_a[ib].e[1]);
@@ -8697,7 +8709,7 @@ index 59931b04b..82d036c75 100644
 @@ -144,8 +144,8 @@ ACC_TYPE mmq_dot_product(const uint ib_a) {
  }
  #endif
-
+ 
 -#if defined(DATA_A_MXFP4)
 -// 1-byte loads for mxfp4 blocks (17 bytes)
 +#if defined(DATA_A_MXFP4) || defined(DATA_A_ROCMFP4) || defined(DATA_A_ROCMFP4_FAST)
@@ -8708,7 +8720,7 @@ index 59931b04b..82d036c75 100644
 @@ -155,11 +155,23 @@ void block_a_to_shmem(const uint buf_ib, const uint ib, const uint iqs) {
      const u8vec4 i_a0 = unpack8( qs       & 0x0F0F0F0F);
      const u8vec4 i_a1 = unpack8((qs >> 4) & 0x0F0F0F0F);
-
+ 
 +#if defined(DATA_A_ROCMFP4) || defined(DATA_A_ROCMFP4_FAST)
 +    buf_a[buf_ib].qs[iqs    ] = pack32(i8vec4(kvalues_rocmfp4[i_a0.x], kvalues_rocmfp4[i_a0.y], kvalues_rocmfp4[i_a0.z], kvalues_rocmfp4[i_a0.w]));
 +    buf_a[buf_ib].qs[iqs + 4] = pack32(i8vec4(kvalues_rocmfp4[i_a1.x], kvalues_rocmfp4[i_a1.y], kvalues_rocmfp4[i_a1.z], kvalues_rocmfp4[i_a1.w]));
@@ -8716,7 +8728,7 @@ index 59931b04b..82d036c75 100644
      buf_a[buf_ib].qs[iqs    ] = pack32(i8vec4(kvalues_mxfp4[i_a0.x], kvalues_mxfp4[i_a0.y], kvalues_mxfp4[i_a0.z], kvalues_mxfp4[i_a0.w]));
      buf_a[buf_ib].qs[iqs + 4] = pack32(i8vec4(kvalues_mxfp4[i_a1.x], kvalues_mxfp4[i_a1.y], kvalues_mxfp4[i_a1.z], kvalues_mxfp4[i_a1.w]));
 +#endif
-
+ 
      if (iqs == 0) {
 +#if defined(DATA_A_ROCMFP4)
 +        buf_a[buf_ib].d = FLOAT_TYPEV2(ue4m3_to_fp32(data_a[ib].e[0]),
@@ -8728,10 +8740,10 @@ index 59931b04b..82d036c75 100644
 +#endif
      }
  }
-
+ 
 @@ -172,6 +184,24 @@ void block_a_to_registers(const uint reg_ib, const uint buf_ib) {
  }
-
+ 
  ACC_TYPE mmq_dot_product(const uint ib_a) {
 +#if defined(DATA_A_ROCMFP4_FAST)
 +    int32_t q_sum = 0;
@@ -8756,12 +8768,12 @@ index 59931b04b..82d036c75 100644
          const int32_t qs_a = cache_a[ib_a].qs[iqs];
 @@ -180,6 +210,7 @@ ACC_TYPE mmq_dot_product(const uint ib_a) {
      }
-
+ 
      return ACC_TYPE(float(cache_a[ib_a].d) * float(cache_b.ds.x) * float(q_sum));
 +#endif
  }
  #endif
-
+ 
 diff --git a/ggml/src/ggml-vulkan/vulkan-shaders/mul_mmq_shmem_types.glsl b/ggml/src/ggml-vulkan/vulkan-shaders/mul_mmq_shmem_types.glsl
 index 79c933f40..847d5e48a 100644
 --- a/ggml/src/ggml-vulkan/vulkan-shaders/mul_mmq_shmem_types.glsl
@@ -8792,7 +8804,7 @@ index 4bcd97756..f82268d30 100644
 @@ -1713,6 +1713,35 @@ struct block_mxfp4
  #define A_TYPE block_mxfp4
  #endif
-
+ 
 +#define QUANT_K_ROCMFP4 32
 +#define QUANT_R_ROCMFP4 2
 +
@@ -8824,10 +8836,10 @@ index 4bcd97756..f82268d30 100644
 +
  #define QUANT_K_NVFP4 64
  #define QUANT_R_NVFP4 1
-
+ 
 @@ -1755,9 +1784,20 @@ const int8_t kvalues_mxfp4_const[16] = {
  };
-
+ 
  shared int8_t kvalues_mxfp4[16];
 +#endif
 +
@@ -8840,17 +8852,17 @@ index 4bcd97756..f82268d30 100644
 +shared int8_t kvalues_rocmfp4[16];
 +shared float rocmfp4_ue4m3_fp32_lut[128];
 +#endif
-
+ 
  #if defined(DATA_A_NVFP4)
 -// UE4M3 scale in NVFP4 blocks use only 7 bits; sign (bit 7) is always zero.
 +// UE4M3 scale bytes use only 7 bits; sign (bit 7) is always zero.
  shared float ue4m3_fp32_lut[128];
-
+ 
  float ue4m3_to_fp32_build(uint u) {
 @@ -1774,13 +1814,42 @@ float ue4m3_to_fp32_build(uint u) {
  }
  #endif
-
+ 
 +#if defined(DATA_A_ROCMFP4) || defined(DATA_A_ROCMFP4_FAST)
 +float rocmfp4_ue4m3_to_fp32_build(uint u) {
 +    if (u == 0u || u == 127u) {
@@ -8893,7 +8905,7 @@ index 4bcd97756..f82268d30 100644
 @@ -1822,7 +1891,11 @@ float e8m0_to_fp32(uint8_t x) {
      return uintBitsToFloat(bits);
  }
-
+ 
 -#if defined(DATA_A_NVFP4)
 +#if defined(DATA_A_ROCMFP4) || defined(DATA_A_ROCMFP4_FAST)
 +float ue4m3_to_fp32(uint8_t x) {
@@ -8923,10 +8935,10 @@ index d99b2b5d8..2b757b42c 100644
 -        else if ((tname == "q5_0") || (tname == "q8_0") || (tname == "q2_k") || (tname == "q4_k") || (tname == "q5_k") || (tname == "iq3_xxs") || (tname == "iq3_s") || (tname == "iq4_xs") || (tname == "iq4_nl") || (tname == "mxfp4") || (tname == "nvfp4"))
 +        else if ((tname == "q5_0") || (tname == "q8_0") || (tname == "q2_k") || (tname == "q4_k") || (tname == "q5_k") || (tname == "iq3_xxs") || (tname == "iq3_s") || (tname == "iq4_xs") || (tname == "iq4_nl") || (tname == "mxfp4") || (tname == "rocmfp4") || (tname == "rocmfp4_fast") || (tname == "nvfp4"))
              load_vec_quant = "4";
-
+ 
          if (tname == "bf16") {
 @@ -590,7 +592,7 @@ void matmul_shaders(bool fp16, MatMulIdType matmul_id_type, bool coopmat, bool c
-
+ 
  #if defined(GGML_VULKAN_INTEGER_DOT_GLSLC_SUPPORT)
          // Integer dot mmq performs better with f32 accumulators
 -        if (!f16acc && !coopmat && !coopmat2 && (is_legacy_quant(tname) || is_k_quant(tname) || tname == "mxfp4")) {
@@ -8936,7 +8948,7 @@ index d99b2b5d8..2b757b42c 100644
  #endif
 @@ -654,10 +656,10 @@ void process_shaders() {
              }
-
+ 
              string_to_spv("flash_attn_f32_f16", "flash_attn.comp",
 -                merge_maps(fa_base_dict, {{"Q_TYPE", "float"}, {"D_TYPE", "float"}, {"D_TYPEV4", "vec4"}}), fp16, false, false, f16acc);
 +                merge_maps(fa_base_dict, {{"Q_TYPE", "float"}, {"D_TYPE", "float"}, {"D_TYPEV4", "vec4"}, {"FA_ROCMFP4", "1"}}), fp16, false, false, f16acc);
@@ -8948,7 +8960,7 @@ index d99b2b5d8..2b757b42c 100644
          }
      }
 @@ -684,7 +686,7 @@ void process_shaders() {
-
+ 
          // mul mat vec with integer dot product
  #if defined(GGML_VULKAN_INTEGER_DOT_GLSLC_SUPPORT)
 -        if (is_legacy_quant(tname) || tname == "mxfp4" || is_k_quant(tname) || tname == "iq1_s" || tname == "iq1_m") {
@@ -8964,12 +8976,12 @@ index d99b2b5d8..2b757b42c 100644
 +    string_to_spv("contig_cpy_u8_u8", "contig_copy.comp", {{"A_TYPE", "uint8_t"}, {"D_TYPE", "uint8_t"}});
      string_to_spv("cpy_f32_i32", "copy.comp", {{"A_TYPE", "float"}, {"D_TYPE", "int"}});
      string_to_spv("cpy_i32_f32", "copy.comp", {{"A_TYPE", "int"}, {"D_TYPE", "float"}});
-
+ 
      string_to_spv("cpy_transpose_16", "copy_transpose.comp", {{"A_TYPE", "uint16_t"}, {"D_TYPE", "uint16_t"}});
      string_to_spv("cpy_transpose_32", "copy_transpose.comp", {{"A_TYPE", "uint"}, {"D_TYPE", "uint"}});
 +    string_to_spv("cpy_rocmfp4_rocmfp4", "copy_quant_same.comp", {{"A_TYPE", "uint8_t"}, {"D_TYPE", "uint8_t"}, {"QUANT_K", "32"}, {"BLOCK_BYTES", "18"}});
 +    string_to_spv("cpy_rocmfp4_fast_rocmfp4_fast", "copy_quant_same.comp", {{"A_TYPE", "uint8_t"}, {"D_TYPE", "uint8_t"}, {"QUANT_K", "32"}, {"BLOCK_BYTES", "17"}});
-
+ 
 -    for (std::string t : {"q1_0", "q4_0", "q4_1", "q5_0", "q5_1", "q8_0", "iq4_nl"}) {
 +    for (std::string t : {"q1_0", "q4_0", "q4_1", "q5_0", "q5_1", "q8_0", "iq4_nl", "rocmfp4", "rocmfp4_fast"}) {
          string_to_spv("cpy_f32_" + t, "copy_to_quant.comp", {{"DATA_A_" + to_uppercase(t), "1"}, {"D_TYPE", "float"}, {"FLOAT_TYPE", "float"}});
@@ -8979,14 +8991,14 @@ index d99b2b5d8..2b757b42c 100644
 +        string_to_spv("cpy_f16_" + t,  "copy_to_quant.comp", {{"DATA_A_" + to_uppercase(t), "1"}, {"S_TYPE", "float16_t"}, {"D_TYPE", "float"}, {"FLOAT_TYPE", "float"}});
 +        string_to_spv("cpy_bf16_" + t, "copy_to_quant.comp", {{"DATA_A_" + to_uppercase(t), "1"}, {"S_TYPE", "uint16_t"}, {"DATA_S_BF16", "1"}, {"D_TYPE", "float"}, {"FLOAT_TYPE", "float"}});
 +    }
-
+ 
 -    for (std::string t : {"f32", "f16", "bf16", "q1_0", "q4_0", "q4_1", "q5_0", "q5_1", "q8_0", "iq4_nl"}) {
 +    for (std::string t : {"f32", "f16", "bf16", "q1_0", "q4_0", "q4_1", "q5_0", "q5_1", "q8_0", "iq4_nl", "rocmfp4", "rocmfp4_fast"}) {
          string_to_spv("set_rows_" + t + "_i32", "copy_to_quant.comp", {{"SET_ROWS", "1"}, {"DATA_A_" + to_uppercase(t), "1"}, {"B_TYPE", "uint"}, {"B_SIZE", "32"}, {"D_TYPE", "float"}, {"FLOAT_TYPE", "float"}});
          string_to_spv("set_rows_" + t + "_i64", "copy_to_quant.comp", {{"SET_ROWS", "1"}, {"DATA_A_" + to_uppercase(t), "1"}, {"B_TYPE", "uvec2"}, {"B_SIZE", "64"}, {"D_TYPE", "float"}, {"FLOAT_TYPE", "float"}});
      }
 @@ -1106,7 +1116,7 @@ void write_output_files() {
-
+ 
      for (const std::string& btype : btypes) {
      for (const auto& tname : type_names) {
 -        if (btype == "q8_1" && !is_legacy_quant(tname) && tname != "mxfp4" && !is_k_quant(tname) && tname != "iq1_s" && tname != "iq1_m") {
@@ -8999,11 +9011,11 @@ index 476c30797..08775d580 100644
 --- a/ggml/src/ggml.c
 +++ b/ggml/src/ggml.c
 @@ -9,6 +9,7 @@
-
+ 
  // FIXME: required here for quantization functions
  #include "ggml-quants.h"
 +#include "../rocmfp4/rocmfp4.h"
-
+ 
  #ifdef GGML_USE_CPU_HBM
  #include <hbwmalloc.h>
 @@ -682,6 +683,22 @@ static const struct ggml_type_traits type_traits[GGML_TYPE_COUNT] = {
@@ -9073,7 +9085,7 @@ index 75095b22d..c9f0b8539 100644
 +        LLAMA_FTYPE_MOSTLY_Q4_0_ROCMFP4_FAST_COHERENT = 104, // ROCmFP4 fast with Q6_K token embeddings
 +        LLAMA_FTYPE_MOSTLY_Q4_0_ROCMFP4_STRIX    = 105, // ROCmFP4 Strix Halo quality/speed recipe
 +        LLAMA_FTYPE_MOSTLY_Q4_0_ROCMFP4_STRIX_LEAN = 106, // ROCmFP4 Strix Halo size-biased K/V recipe
-
+ 
          LLAMA_FTYPE_GUESSED = 1024, // not specified in the model file
      };
 diff --git a/scripts/build-strix-rocmfp4-mtp.sh b/scripts/build-strix-rocmfp4-mtp.sh
@@ -10212,7 +10224,7 @@ index 43e05c3d5..027c7378e 100644
 @@ -443,7 +445,22 @@ static ggml_type llama_tensor_get_type_impl(quantize_state_impl & qs, ggml_type
              const int64_t nx = tensor->ne[0];
              const int64_t qk_k = ggml_blck_size(new_type);
-
+ 
 -            if (ftype == LLAMA_FTYPE_MOSTLY_MXFP4_MOE) {
 +            if (ftype == LLAMA_FTYPE_MOSTLY_Q4_0_ROCMFP4_FAST) {
 +                new_type = GGML_TYPE_Q4_0_ROCMFP4_FAST;
@@ -10396,14 +10408,14 @@ index 13abc24e5..77acf2ed5 100644
 +    GGML_TYPE_MXFP4, GGML_TYPE_Q4_0_ROCMFP4, GGML_TYPE_Q4_0_ROCMFP4_FAST, GGML_TYPE_NVFP4, // TODO: or "other"
      GGML_TYPE_IQ2_XXS
  };
-
+ 
 @@ -8910,6 +8919,8 @@ static std::vector<std::unique_ptr<test_case>> make_test_cases_eval() {
      test_cases.emplace_back(new test_flash_attn_ext(128, 64, 4, {1, 1}, 128, 2, true, false, 0, 0, GGML_PREC_F32, GGML_TYPE_Q1_0, GGML_TYPE_Q4_0));
      test_cases.emplace_back(new test_flash_attn_ext(64, 128, 4, {1, 1}, 128, 2, true, false, 0, 0, GGML_PREC_F32, GGML_TYPE_Q4_0, GGML_TYPE_Q1_0));
      test_cases.emplace_back(new test_flash_attn_ext(128, 64, 4, {1, 1}, 64, 2, true, false, 0, 0, GGML_PREC_F32, GGML_TYPE_Q1_0, GGML_TYPE_F16));
 +    test_cases.emplace_back(new test_flash_attn_ext(64, 64, 4, {1, 1}, 128, 2, true, false, 0, 0, GGML_PREC_F32, GGML_TYPE_Q4_0_ROCMFP4, GGML_TYPE_Q4_0_ROCMFP4));
 +    test_cases.emplace_back(new test_flash_attn_ext(64, 64, 4, {1, 1}, 128, 2, true, false, 0, 0, GGML_PREC_F32, GGML_TYPE_Q4_0_ROCMFP4_FAST, GGML_TYPE_Q4_0_ROCMFP4_FAST));
-
+ 
      test_cases.emplace_back(new test_cross_entropy_loss     (GGML_TYPE_F32, {   10, 5, 4, 3}));
      test_cases.emplace_back(new test_cross_entropy_loss     (GGML_TYPE_F32, {30000, 1, 1, 1}));
 @@ -9077,6 +9088,14 @@ static std::vector<std::unique_ptr<test_case>> make_test_cases_perf() {
@@ -10418,7 +10430,7 @@ index 13abc24e5..77acf2ed5 100644
 +    test_cases.emplace_back(new test_cpy(GGML_TYPE_F16, GGML_TYPE_Q4_0_ROCMFP4_FAST, {8192, 512, 2, 1}));
 +    test_cases.emplace_back(new test_cpy(GGML_TYPE_BF16, GGML_TYPE_Q4_0_ROCMFP4_FAST, {8192, 512, 2, 1}));
 +    test_cases.emplace_back(new test_cpy(GGML_TYPE_Q4_0_ROCMFP4_FAST, GGML_TYPE_F32, {8192, 512, 2, 1}));
-
+ 
      test_cases.emplace_back(new test_cpy(GGML_TYPE_F32, GGML_TYPE_F32, {768*1024, 256, 1, 1}, {1, 0, 2, 3}, {0, 0, 0, 0}));
      test_cases.emplace_back(new test_cpy(GGML_TYPE_F16, GGML_TYPE_F16, {768*1024, 256, 1, 1}, {1, 0, 2, 3}, {0, 0, 0, 0}));
 @@ -9197,6 +9216,10 @@ static std::vector<std::unique_ptr<test_case>> make_test_cases_perf() {
@@ -10429,7 +10441,7 @@ index 13abc24e5..77acf2ed5 100644
 +    test_cases.emplace_back(new test_flash_attn_ext(64, 64, 8, {8, 1}, 7680,   1, true, false, 0, 0, GGML_PREC_F32, GGML_TYPE_Q4_0_ROCMFP4_FAST, GGML_TYPE_Q4_0_ROCMFP4_FAST));
 +    test_cases.emplace_back(new test_flash_attn_ext(128, 128, 8, {12, 1}, 7680, 1, true, false, 0, 0, GGML_PREC_F32, GGML_TYPE_Q4_0_ROCMFP4, GGML_TYPE_Q4_0_ROCMFP4));
 +    test_cases.emplace_back(new test_flash_attn_ext(128, 128, 8, {12, 1}, 7680, 1, true, false, 0, 0, GGML_PREC_F32, GGML_TYPE_Q4_0_ROCMFP4_FAST, GGML_TYPE_Q4_0_ROCMFP4_FAST));
-
+ 
      for (int kv : { 4096, 8192, 16384, }) {
          for (int hs : { 64, 128, }) {
 diff --git a/tests/test-quantize-perf.cpp b/tests/test-quantize-perf.cpp
@@ -10443,11 +10455,11 @@ index cac0782de..3974e2337 100644
 +    bool use_imatrix = false;
      int64_t iterations = ITERATIONS;
  };
-
+ 
 @@ -67,6 +68,12 @@ static void generate_data(float offset, size_t n, float * dst) {
      }
  }
-
+ 
 +static void generate_importance_data(size_t n, float * dst) {
 +    for (size_t i = 0; i < n; i++) {
 +        dst[i] = 0.5f + fabsf(sinf(0.125f * i));
@@ -10475,27 +10487,27 @@ index cac0782de..3974e2337 100644
              if (++i >= argc) {
                  invalid_param = true;
 @@ -245,18 +255,21 @@ int main(int argc, char * argv[]) {
-
+ 
      std::vector<uint8_t> test_data1_v(largest*4 + MAX_ALIGNMENT*2);
      std::vector<uint8_t> test_data2_v(largest*4 + MAX_ALIGNMENT*2);
 +    std::vector<uint8_t> test_weight_v(largest*4 + MAX_ALIGNMENT*2);
      std::vector<uint8_t> test_q1_v   (largest*4 + MAX_ALIGNMENT*2);
      std::vector<uint8_t> test_q2_v   (largest*4 + MAX_ALIGNMENT*2);
      std::vector<uint8_t> test_out_v  (largest*4 + MAX_ALIGNMENT*2);
-
+ 
      float * test_data1 = (float *) align_with_offset(test_data1_v.data(), params.alignment_offset);
      float * test_data2 = (float *) align_with_offset(test_data2_v.data(), params.alignment_offset);
 +    float * test_weight = (float *) align_with_offset(test_weight_v.data(), params.alignment_offset);
      float * test_q1    = (float *) align_with_offset(test_q1_v.data(),    params.alignment_offset);
      float * test_q2    = (float *) align_with_offset(test_q2_v.data(),    params.alignment_offset);
      float * test_out   = (float *) align_with_offset(test_out_v.data(),   params.alignment_offset);
-
+ 
      generate_data(0, largest, test_data1);
      generate_data(1, largest, test_data2);
 +    generate_importance_data(largest, test_weight);
-
+ 
      int64_t iterations = params.iterations;
-
+ 
 @@ -294,7 +307,11 @@ int main(int argc, char * argv[]) {
                  for (size_t size : params.test_sizes) {
                      printf("    %zu values (%.2f MB)\n", size, 4*size/(float)(1024*1024));
@@ -10523,7 +10535,7 @@ index 07198fb16..660b3f939 100644
 +    if (s == "q4_0_rocmfp4_fast") {
 +        return GGML_TYPE_Q4_0_ROCMFP4_FAST;
 +    }
-
+ 
      return GGML_TYPE_COUNT;
  }
 diff --git a/tools/quantize/quantize.cpp b/tools/quantize/quantize.cpp

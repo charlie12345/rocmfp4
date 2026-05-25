@@ -81,8 +81,8 @@ cd ../llama.cpp-rocmfp4
 
 The helper runs `git apply --check` first. If the base has drifted, resolve the
 patch conflicts in the llama.cpp checkout and rerun the relevant build/tests.
-If the GitHub repositories are private, public users cannot clone them from a
-Twitter link until the owner makes them public or invites collaborators.
+Both reference repositories are public, so Strix Halo users can clone either
+the ready-to-build fork or this standalone package directly.
 
 ## Build On Strix Halo
 
