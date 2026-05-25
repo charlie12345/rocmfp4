@@ -1182,10 +1182,10 @@ index 3488b9393..368b7e3b8 100644
      bool need_embd() const override {
 diff --git a/docs/ROCmFP4-MTP-COMPARISON.md b/docs/ROCmFP4-MTP-COMPARISON.md
 new file mode 100644
-index 000000000..7eb94cd3c
+index 000000000..2594c54d1
 --- /dev/null
 +++ b/docs/ROCmFP4-MTP-COMPARISON.md
-@@ -0,0 +1,915 @@
+@@ -0,0 +1,936 @@
 +# ROCmFP4 + MTP Comparison
 +
 +Date: 2026-05-23
@@ -1892,6 +1892,7 @@ index 000000000..7eb94cd3c
 +| `V_NTHREADS=4` with promoted `V_ROWS_PER_THREAD=8` | 77.35 us | 77.25 us | 33.5 | 27.7 | rejected for default; Qwen-style dual improved to 187.72 us, but 64d and Qwen-style FAST regressed and Qwen MTP decode did not improve |
 +| dual-scale-only 128d V-thread specialization `GGML_ROCMFP4_FATTN_V_NTHREADS_D128_DUAL=4` | 70.37 us | 66.31 us | 33.7 | 27.9 | promoted; leaves 64d and FAST defaults intact while Qwen-style 128d dual-scale improves to 188.75 us and FAST stays guarded at 171.89 us |
 +| `V_NTHREADS=8` with promoted `V_ROWS_PER_THREAD=8` | 81.22 us | 78.36 us | not run | not run | rejected; every focused FA row regressed versus the promoted default, including Qwen-style 128d at 208.94 / 200.45 us |
++| `V_ROWS_PER_THREAD=16` | build failed | build failed | not run | not run | rejected; ROCmFP4 V dequant supports only `2/4/8` and the fixed-copy helper rejects the resulting 32-byte move |
 +| `KQ_NTHREADS=2` with promoted `V_ROWS_PER_THREAD=8` | 80.68 us | 78.27 us | not run | not run | rejected; Qwen-style 128d dual-scale failed the guard at 245.84 us and FAST regressed to 207.04 us |
 +| Qwen-style 128d FA guard with `V_NTHREADS=4` | 244.01 us | 224.21 us | not run | not run | rejected; tiny dual win, FAST and 64d guard regress |
 +| Qwen-style 128d FA guard with `KQ_NTHREADS=2,V_NTHREADS=2` | 268.53 us | 226.32 us | not run | not run | rejected; Qwen-style dual and FAST regress |
@@ -2015,7 +2016,11 @@ index 000000000..7eb94cd3c
 +| Setting change | Short decode tok/s | Sustained decode tok/s | Result |
 +|---|---:|---:|---|
 +| ROCmFP4 MoE `rows_per_block=4` | 103.8 | 89.1 | rejected; close sustained tie, but below the promoted `104.3` / `89.3` band |
++| ROCmFP4 MoE `rows_per_block=2` | 104.6 | 90.0 | rejected; tied the promoted sustained band but did not improve it |
++| Dedicated MMVQ MoE `rows_per_block=3` | n/a | 86.8 | rejected; slower than promoted sustained band |
 +| ROCmFP4 MoE `rows_per_block=1` | 103.6 | 88.7 | rejected; slower than default |
++| ROCmFP4 MoE `rows_per_block=1` repeat after top-k/p-min promotion | 90.9 | not run | rejected after short-response regression |
++| `GGML_ROCMFP4_RDNA35_NWARPS_MAX_NCOLS=3` | n/a | 87.5 | rejected; same-session promoted build reached `89.6 tok/s` on identical flags |
 +
 +Rejected Qwen3.6 35B A3B combined probability-profile checks on the same
 +promoted profile:
@@ -2029,6 +2034,14 @@ index 000000000..7eb94cd3c
 +| `--spec-draft-p-min 0.25 --spec-draft-p-split 0.70` | 104.8 | 89.5 | tied same-session default sustained; not enough to promote |
 +| `--spec-draft-p-min 0.25 --spec-draft-p-split 0.90` | 104.7 | 89.5 | tied same-session default |
 +| `--spec-draft-p-min 0.50 --spec-draft-p-split 0.30` | 104.6 | 89.2 | sustained regression |
++
++Rejected internal MTP sampler candidate-count checks on the same promoted
++profile:
++
++| Internal MTP sampler `top_k` | Sustained decode tok/s | Result |
++|---:|---:|---|
++| 5 | 77.3 | rejected; too little candidate mass for the promoted `p-min 0.25` profile |
++| 20 | 69.6 | rejected; more candidates did not improve acceptance enough to offset the path |
 +
 +Rejected CPU/reference-path checks from the same optimization pass:
 +
@@ -2090,6 +2103,14 @@ index 000000000..7eb94cd3c
 +The ROCm CPY guard stayed in the same band, with F32-to-dual at
 +`1119.04 us/run` and F32-to-FAST at `1229.08 us/run`, while HIP emitted
 +unroll-failed warnings during compilation.
++
++Replacing packed-count multiply/divide expressions in the ROCmFP4 CPY and HIP
++helpers with shift/mask arithmetic was also rejected. The focused guard moved
++source-to-quant paths only inside noise (`F32/F16/BF16 -> dual` at
++`1106.34`/`1008.52`/`1006.51 us/run`, `F32/F16/BF16 -> FAST` at
++`1045.16`/`952.41`/`950.70 us/run`) while slightly regressing quant-to-F32
++(`dual -> F32` from `182.06` to `183.45 us/run`, FAST from `170.24` to
++`170.44 us/run`). The code change was removed.
 +
 +The promoted Qwen MTP ROCmFP4 path remains the plain `draft-mtp` ROCm0 run
 +with `--spec-draft-n-max 4` plus the dual-scale-only MMVQ `vdr=4` tune. The
@@ -2457,10 +2478,10 @@ index 41566d41a..408670d1d 100644
      // available tensor operations:
 diff --git a/ggml/rocmfp4/README.md b/ggml/rocmfp4/README.md
 new file mode 100644
-index 000000000..330f45d25
+index 000000000..ea6bee2cc
 --- /dev/null
 +++ b/ggml/rocmfp4/README.md
-@@ -0,0 +1,902 @@
+@@ -0,0 +1,920 @@
 +# ROCmFP4
 +
 +ROCmFP4 is the experimental `Q4_0_ROCMFP4` GGUF tensor type for Strix Halo.
@@ -2557,8 +2578,9 @@ index 000000000..330f45d25
 +  `88.5 tok/s` sustained; the change was removed.
 +  MoE `rows_per_block` compile-time variants were checked against the same 35B
 +  guard and also rejected: `rows_per_block=4` measured `103.8` short /
-+  `89.1 tok/s` sustained, and `rows_per_block=1` measured `103.6` /
-+  `88.7 tok/s`, neither beating the promoted `104.3` / `89.3` band.
++  `89.1 tok/s` sustained, `rows_per_block=3` measured `86.8 tok/s` sustained,
++  and `rows_per_block=1` measured `103.6` / `88.7 tok/s`, none beating the
++  promoted `104.3` / `89.3` band.
 +  The Pi server profile was also started and stopped successfully with
 +  `n_ctx = 262144`, `draft-mtp` initialized, built-in tools enabled, and
 +  `thinking = 1`; ROCm reported no KFD PIDs after shutdown. The promoted
@@ -2592,6 +2614,10 @@ index 000000000..330f45d25
 +  `p-min 0.25` filter regressed it to `24.6 tok/s` sustained. The full
 +  all-regression harness can include the 35B guard with
 +  `INCLUDE_QWEN35_A3B_GUARD=1`.
++  Retesting the internal MTP sampler candidate count on the 35B A3B
++  reasoning-on profile rejected both directions around the promoted `top_k=10`
++  setting: `top_k=5` fell to `77.3 tok/s` sustained and `top_k=20` fell to
++  `69.6 tok/s` sustained.
 +- Reasoning-off checks on the final 35B q8-main/q4-draft profile are a
 +  separate lower-throughput mode. `n-max 1/2/3/4` measured `77.7` / `73.9`,
 +  `90.3` / `75.5`, `100.3` / `71.9`, and `85.7` / `66.1` short/sustained
@@ -2649,7 +2675,10 @@ index 000000000..330f45d25
 +  launch from `n=1` to `n=1..4` improved some focused multi-column ROCm
 +  microbench rows (`dual n=2` reached `57.14` us/run), but Qwen3.6 27B MTP
 +  sustained decode fell to `23.6 tok/s`, so the promoted upper bound stops at
-+  `n=2`.
++  `n=2`. A midpoint `GGML_ROCMFP4_RDNA35_NWARPS_MAX_NCOLS=3` build was also
++  checked on the Qwen3.6 35B A3B reasoning-on 262k profile; it reached
++  `87.5 tok/s` sustained versus `89.6 tok/s` for the same-session promoted
++  build, so `n=2` remains the default.
 +- ROCm/HIP RDNA3.5 wide-column rows-per-block now has ROCmFP4-owned compile-time
 +  test knobs: `GGML_ROCMFP4_RDNA35_RPB_WIDE`,
 +  `GGML_ROCMFP4_RDNA35_RPB_WIDE_DUAL`, and
@@ -2791,6 +2820,16 @@ index 000000000..330f45d25
 +  64d dual-scale / FAST and `188.75` / `171.89` us for Qwen-style 128d
 +  dual-scale / FAST, while Qwen3.6 27B MTP held `33.7 tok/s` short and
 +  `27.9 tok/s` sustained with no KFD PIDs left running.
++  Retesting `GGML_ROCMFP4_FATTN_V_NTHREADS_D128_DUAL=8` was rejected. It
++  slightly improved the 64d dual-scale row (`69.40` us versus a same-session
++  `70.92` us promoted build), but regressed the Qwen-style 128d dual-scale row
++  from `194.40` to `211.10` us/run. Because long-context Qwen is the relevant
++  guard, the promoted D128 dual-scale V grouping remains `4`.
++  `GGML_ROCMFP4_FATTN_V_ROWS_PER_THREAD=16` was rejected during compilation:
++  the ROCmFP4 V dequantizer intentionally supports only `2`, `4`, and `8`
++  rows per thread, and the fixed-copy helper does not support the resulting
++  32-byte move. The source now rejects unsupported values with a direct
++  ROCmFP4 compile-time error.
 +- Vulkan ROCmFP4 scale decode now uses a shared UE4M3 lookup table with
 +  ROCmFP4's half-scale semantics. This moved the focused Vulkan dual-scale
 +  `MUL_MAT` guard from `82.86`, `120.77`, and `181.28` us/run to `65.05`,
@@ -5717,10 +5756,10 @@ index beeb52389..58c4b64c5 100644
          return dequantize_V_bf16<float, ne>;
      } else {
 diff --git a/ggml/src/ggml-cuda/fattn-vec.cuh b/ggml/src/ggml-cuda/fattn-vec.cuh
-index f0bd42a57..3bf7df04a 100644
+index f0bd42a57..27bf71c8f 100644
 --- a/ggml/src/ggml-cuda/fattn-vec.cuh
 +++ b/ggml/src/ggml-cuda/fattn-vec.cuh
-@@ -64,14 +64,36 @@ static __global__ void flash_attn_ext_vec(
+@@ -64,14 +64,41 @@ static __global__ void flash_attn_ext_vec(
  
  #ifdef GGML_USE_HIP
  #ifdef RDNA
@@ -5747,6 +5786,11 @@ index f0bd42a57..3bf7df04a 100644
 +#ifndef GGML_ROCMFP4_FATTN_V_ROWS_PER_THREAD
 +#define GGML_ROCMFP4_FATTN_V_ROWS_PER_THREAD 8
 +#endif
++#if GGML_ROCMFP4_FATTN_V_ROWS_PER_THREAD != 2 && \
++    GGML_ROCMFP4_FATTN_V_ROWS_PER_THREAD != 4 && \
++    GGML_ROCMFP4_FATTN_V_ROWS_PER_THREAD != 8
++#error "GGML_ROCMFP4_FATTN_V_ROWS_PER_THREAD must be 2, 4, or 8"
++#endif
 +    constexpr int nthreads_KQ_q = type_K_rocmfp4 ? GGML_ROCMFP4_FATTN_KQ_NTHREADS : nthreads_KQ_q_default;
 +    constexpr int nthreads_V_q_rocmfp4 =
 +        type_V == GGML_TYPE_Q4_0_ROCMFP4 && D == 128 ? GGML_ROCMFP4_FATTN_V_NTHREADS_D128_DUAL :
@@ -5760,7 +5804,7 @@ index f0bd42a57..3bf7df04a 100644
  #endif // GGML_USE_HIP
  
      constexpr int nthreads    = ggml_cuda_fattn_vec_get_nthreads_device();
-@@ -81,7 +103,7 @@ static __global__ void flash_attn_ext_vec(
+@@ -81,7 +108,7 @@ static __global__ void flash_attn_ext_vec(
      static_assert(WARP_SIZE % nthreads_KQ == 0, "bad nthreads_K");
      static_assert(WARP_SIZE % nthreads_V  == 0, "bad nthreads_V");
  
@@ -5769,7 +5813,7 @@ index f0bd42a57..3bf7df04a 100644
      constexpr int V_cols_per_iter   = WARP_SIZE / nthreads_V;
  
      constexpr vec_dot_KQ_t vec_dot_KQ = get_vec_dot_KQ<type_K, D, nthreads_KQ>();
-@@ -598,3 +620,10 @@ EXTERN_DECL_FATTN_VEC_CASES(256, GGML_TYPE_Q5_0)
+@@ -598,3 +625,10 @@ EXTERN_DECL_FATTN_VEC_CASES(256, GGML_TYPE_Q5_0)
  EXTERN_DECL_FATTN_VEC_CASES(256, GGML_TYPE_Q5_1)
  EXTERN_DECL_FATTN_VEC_CASES(256, GGML_TYPE_Q8_0)
  EXTERN_DECL_FATTN_VEC_CASES(256, GGML_TYPE_BF16)
