@@ -1,0 +1,7 @@
+/build/
+/dist/
+*.log
+*.tmp
+*.gguf
+*.safetensors
+*.bin
