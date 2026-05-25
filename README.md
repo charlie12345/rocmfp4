@@ -7,6 +7,9 @@ This repository is the clean integration package. The full reference fork lives
 at `charlie12345/rocmfp4-llama` and remains useful when you want a buildable
 llama.cpp tree with the ROCmFP4 patches already applied.
 
+For a complete Strix Halo install path, see
+`docs/STRIX-HALO-QUICKSTART.md`.
+
 ## What It Adds
 
 - `Q4_0_ROCMFP4`: dual-scale 4-bit Codebook10 layout at 4.50 BPW.
@@ -51,16 +54,35 @@ Known promoted reference results are tracked in:
 ## Apply To llama.cpp
 
 Use a llama.cpp checkout that is close to the MTP base used by the reference
-fork. Then run:
+fork. The easiest route for most users is the full ready-to-build fork:
 
 ```bash
+git clone https://github.com/charlie12345/rocmfp4-llama.git
+cd rocmfp4-llama
+git checkout mtp-rocmfp4-strix
+env JOBS=16 scripts/build-strix-rocmfp4-mtp.sh
+```
+
+Use this standalone package when you want to apply the ROCmFP4 patch yourself.
+The reproducible patch base is published as the
+`mtp-base-for-rocmfp4` branch in the reference fork:
+
+```bash
+git clone https://github.com/charlie12345/rocmfp4-llama.git llama.cpp-rocmfp4
+cd llama.cpp-rocmfp4
+git checkout mtp-base-for-rocmfp4
+cd ..
+
 git clone https://github.com/charlie12345/rocmfp4.git
 cd rocmfp4
-scripts/apply-rocmfp4.sh /path/to/llama.cpp
+scripts/apply-rocmfp4.sh ../llama.cpp-rocmfp4
+cd ../llama.cpp-rocmfp4
 ```
 
 The helper runs `git apply --check` first. If the base has drifted, resolve the
 patch conflicts in the llama.cpp checkout and rerun the relevant build/tests.
+If the GitHub repositories are private, public users cannot clone them from a
+Twitter link until the owner makes them public or invites collaborators.
 
 ## Build On Strix Halo
 
@@ -107,7 +129,7 @@ HSA_OVERRIDE_GFX_VERSION=11.5.1 \
 GGML_HIP_ENABLE_UNIFIED_MEMORY=1 \
 ./build-strix-rocmfp4/bin/llama-cli \
   -m /path/to/model-ROCmFP4-STRIX_LEAN.gguf \
-  --device ROCm0 \
+  -dev ROCm0 \
   -ngl 999 \
   -c 262144 \
   -fa on \
