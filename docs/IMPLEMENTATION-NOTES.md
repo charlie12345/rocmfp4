@@ -92,6 +92,9 @@ Current status:
   A single-sequence MTP `process()` fast path for `-np 1` was also prototyped,
   built, and rejected because the guard dropped to `104.1 tok/s` short and
   `88.5 tok/s` sustained; the change was removed.
+  A follow-up MoE `rows_per_block=3` candidate on the 35B A3B reasoning-on
+  profile was also rejected after sustained decode dropped to `86.8 tok/s`,
+  below the promoted `104.3` / `89.3 tok/s` band.
   The Pi server profile was also started and stopped successfully with
   `n_ctx = 262144`, `draft-mtp` initialized, built-in tools enabled, and
   `thinking = 1`; ROCm reported no KFD PIDs after shutdown. The promoted
