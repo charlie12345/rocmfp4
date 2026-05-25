@@ -836,8 +836,74 @@ index eac878960..2b8436ab3 100644
  };
  
  static ggml_type kv_cache_type_from_str(const std::string & s) {
+diff --git a/common/sampling.cpp b/common/sampling.cpp
+index 5665d0a70..233669617 100644
+--- a/common/sampling.cpp
++++ b/common/sampling.cpp
+@@ -618,6 +618,46 @@ llama_token common_sampler_sample(struct common_sampler * gsmpl, struct llama_co
+     return id;
+ }
+ 
++llama_token_data_array * common_sampler_sample_top_k_probs(struct common_sampler * gsmpl, struct llama_context * ctx, int idx, int32_t top_k) {
++    llama_synchronize(ctx);
++
++    const auto tm = gsmpl->tm();
++
++    auto & cur_p = gsmpl->cur_p;
++    gsmpl->set_logits(ctx, idx);
++
++    if (cur_p.size == 0) {
++        cur_p.selected = -1;
++        return &cur_p;
++    }
++
++    top_k = std::min<int32_t>(std::max<int32_t>(top_k, 1), (int32_t) cur_p.size);
++
++    if (!cur_p.sorted) {
++        std::partial_sort(cur_p.data, cur_p.data + top_k, cur_p.data + cur_p.size,
++                [](const llama_token_data & a, const llama_token_data & b) {
++                    return a.logit > b.logit;
++                });
++    }
++
++    cur_p.size     = top_k;
++    cur_p.sorted   = true;
++    cur_p.selected = 0;
++
++    const float max_l = cur_p.data[0].logit;
++    double sum = 0.0;
++    for (size_t i = 0; i < cur_p.size; ++i) {
++        const float p = expf(cur_p.data[i].logit - max_l);
++        cur_p.data[i].p = p;
++        sum += p;
++    }
++    for (size_t i = 0; i < cur_p.size; ++i) {
++        cur_p.data[i].p /= sum;
++    }
++
++    return &cur_p;
++}
++
+ std::vector<llama_token> common_sampler_sample_and_accept_n(struct common_sampler * gsmpl, struct llama_context * ctx, const std::vector<int> & idxs, const llama_tokens & draft, bool grammar_first) {
+     GGML_ASSERT(idxs.size() == draft.size() + 1 && "idxs.size() must be draft.size() + 1");
+ 
+diff --git a/common/sampling.h b/common/sampling.h
+index 49506a00c..70b07f62e 100644
+--- a/common/sampling.h
++++ b/common/sampling.h
+@@ -64,6 +64,10 @@ struct llama_sampler * common_sampler_get(const struct common_sampler * gsmpl);
+ //
+ llama_token common_sampler_sample(struct common_sampler * gsmpl, struct llama_context * ctx, int idx, bool grammar_first = false);
+ 
++// MTP draft helper: fill current candidates with top-k probabilities and
++// select the highest-probability token without running the final RNG sampler.
++llama_token_data_array * common_sampler_sample_top_k_probs(struct common_sampler * gsmpl, struct llama_context * ctx, int idx, int32_t top_k);
++
+ // generalized version of common_sampler_sample
+ //
+ // will cross-reference the sampled tokens with a batch of draft tokens and accept those that match
 diff --git a/common/speculative.cpp b/common/speculative.cpp
-index 3488b9393..368b7e3b8 100644
+index 3488b9393..b516e0d3e 100644
 --- a/common/speculative.cpp
 +++ b/common/speculative.cpp
 @@ -150,12 +150,26 @@ struct common_speculative_impl {
@@ -959,7 +1025,16 @@ index 3488b9393..368b7e3b8 100644
              }
  
              if (batch.n_tokens == 0) {
-@@ -403,6 +426,7 @@ struct common_speculative_state_draft_mtp : public common_speculative_impl {
+@@ -378,6 +401,8 @@ struct common_speculative_impl_draft_eagle3 : public common_speculative_impl {
+ };
+ 
+ struct common_speculative_state_draft_mtp : public common_speculative_impl {
++    static constexpr int32_t MTP_DRAFT_TOP_K = 10;
++
+     common_params_speculative_draft params; // reuses the draft-model params slot (ctx_tgt/ctx_dft)
+ 
+     llama_batch batch;
+@@ -403,6 +428,7 @@ struct common_speculative_state_draft_mtp : public common_speculative_impl {
      // roll back ctx_dft's recurrent state past the AR draft's redundant
      // pre-advancement before process() mirrored the verify batch.
      std::vector<uint16_t> last_n_drafted;
@@ -967,7 +1042,7 @@ index 3488b9393..368b7e3b8 100644
  
      common_speculative_state_draft_mtp(const common_params_speculative & params, uint32_t n_seq)
          : common_speculative_impl(COMMON_SPECULATIVE_TYPE_DRAFT_MTP, n_seq)
-@@ -424,7 +448,10 @@ struct common_speculative_state_draft_mtp : public common_speculative_impl {
+@@ -424,7 +450,10 @@ struct common_speculative_state_draft_mtp : public common_speculative_impl {
          for (auto & s : smpls) {
              common_params_sampling sparams;
              sparams.no_perf  = false;
@@ -975,11 +1050,11 @@ index 3488b9393..368b7e3b8 100644
 +            // Keep several candidates so --spec-draft-p-min has a meaningful
 +            // probability distribution while the draft loop still selects the
 +            // top candidate after sorting below.
-+            sparams.top_k    = 10;
++            sparams.top_k    = MTP_DRAFT_TOP_K;
              sparams.samplers = { COMMON_SAMPLER_TYPE_TOP_K };
              s.reset(common_sampler_init(llama_get_model(ctx_dft), sparams));
          }
-@@ -438,9 +465,13 @@ struct common_speculative_state_draft_mtp : public common_speculative_impl {
+@@ -438,9 +467,13 @@ struct common_speculative_state_draft_mtp : public common_speculative_impl {
          i_batch_end.assign(n_seq, -1);
  
          verify_h.assign(n_seq, {});
@@ -993,7 +1068,7 @@ index 3488b9393..368b7e3b8 100644
      }
  
      ~common_speculative_state_draft_mtp() override {
-@@ -479,20 +510,22 @@ struct common_speculative_state_draft_mtp : public common_speculative_impl {
+@@ -479,20 +512,22 @@ struct common_speculative_state_draft_mtp : public common_speculative_impl {
  
          const int32_t n_tokens = batch_in.n_tokens;
  
@@ -1025,7 +1100,7 @@ index 3488b9393..368b7e3b8 100644
              }
          }
  
-@@ -504,7 +537,7 @@ struct common_speculative_state_draft_mtp : public common_speculative_impl {
+@@ -504,7 +539,7 @@ struct common_speculative_state_draft_mtp : public common_speculative_impl {
          common_batch_clear(batch);
  
          for (int k = 0; k < n_tokens; ++k) {
@@ -1034,7 +1109,7 @@ index 3488b9393..368b7e3b8 100644
          }
  
          // shift the tgt embeddings to the right by one position
-@@ -545,22 +578,32 @@ struct common_speculative_state_draft_mtp : public common_speculative_impl {
+@@ -545,22 +580,32 @@ struct common_speculative_state_draft_mtp : public common_speculative_impl {
              return false;
          }
  
@@ -1074,7 +1149,7 @@ index 3488b9393..368b7e3b8 100644
          }
  
          return true;
-@@ -573,7 +616,7 @@ struct common_speculative_state_draft_mtp : public common_speculative_impl {
+@@ -573,7 +618,7 @@ struct common_speculative_state_draft_mtp : public common_speculative_impl {
  
          // keep track of which sequences are still drafting
          int n_drafting = 0;
@@ -1083,7 +1158,7 @@ index 3488b9393..368b7e3b8 100644
  
          const float * h_row = nullptr;
          const size_t row_bytes = (size_t) n_embd * sizeof(float);
-@@ -585,16 +628,22 @@ struct common_speculative_state_draft_mtp : public common_speculative_impl {
+@@ -585,16 +630,22 @@ struct common_speculative_state_draft_mtp : public common_speculative_impl {
                  continue;
              }
  
@@ -1108,7 +1183,7 @@ index 3488b9393..368b7e3b8 100644
          int ret = llama_decode(ctx_dft, batch);
          if (ret != 0) {
              LOG_WRN("%s: llama_decode returned %d\n", __func__, ret);
-@@ -602,6 +651,7 @@ struct common_speculative_state_draft_mtp : public common_speculative_impl {
+@@ -602,6 +653,7 @@ struct common_speculative_state_draft_mtp : public common_speculative_impl {
          }
  
          int i = 0;
@@ -1116,10 +1191,17 @@ index 3488b9393..368b7e3b8 100644
  
          while (n_drafting > 0) {
              int i_batch = 0;
-@@ -621,29 +671,37 @@ struct common_speculative_state_draft_mtp : public common_speculative_impl {
+@@ -615,35 +667,41 @@ struct common_speculative_state_draft_mtp : public common_speculative_impl {
  
-                 const auto * cur_p = common_sampler_get_candidates(smpl, true);
+                 auto * smpl = smpls[seq_id].get();
  
+-                common_sampler_sample(smpl, ctx_dft, i_batch, true);
++                const auto * cur_p = common_sampler_sample_top_k_probs(smpl, ctx_dft, i_batch, MTP_DRAFT_TOP_K);
+                 h_row = llama_get_embeddings_pre_norm_ith(ctx_dft, i_batch);
+                 ++i_batch;
+ 
+-                const auto * cur_p = common_sampler_get_candidates(smpl, true);
+-
 -                for (int k = 0; k < std::min(3, (int) cur_p->size); ++k) {
 -                    LOG_DBG(" - seq_id %d, draft candidate %3d, pos %3d: %6d (%8.3f) '%s'\n",
 -                            seq_id, k, i, cur_p->data[k].id, cur_p->data[k].p,
@@ -1182,10 +1264,10 @@ index 3488b9393..368b7e3b8 100644
      bool need_embd() const override {
 diff --git a/docs/ROCmFP4-MTP-COMPARISON.md b/docs/ROCmFP4-MTP-COMPARISON.md
 new file mode 100644
-index 000000000..2594c54d1
+index 000000000..35771faf9
 --- /dev/null
 +++ b/docs/ROCmFP4-MTP-COMPARISON.md
-@@ -0,0 +1,936 @@
+@@ -0,0 +1,948 @@
 +# ROCmFP4 + MTP Comparison
 +
 +Date: 2026-05-23
@@ -1323,7 +1405,12 @@ index 000000000..2594c54d1
 +The focused guard now defaults to `n-max 3`, q8 main KV, q4 draft KV, and
 +`--spec-draft-p-min 0.25`. The promoted top-k-10 MTP sampler pass measured
 +`103.9 tok/s` short and `90.0 tok/s` sustained after a first sustained run at
-+`89.8 tok/s`; guard floors are `100.0` and `85.0 tok/s`.
++`89.8 tok/s`. A follow-up MTP draft sampler cleanup keeps the same top-10
++probability distribution but skips the unused final RNG sampler selection; the
++candidate measured `104.6 tok/s` short and `90.2 tok/s` sustained on the
++35B A3B guard, while the dense 27B guard held `33.9 tok/s` short and
++`28.1 tok/s` sustained. Guard floors are `100.0` and `85.0 tok/s` for 35B,
++and `30.0` / `25.5 tok/s` for dense 27B.
 +
 +Follow-up acceptance-threshold checks on the q4-KV `n-max 2` profile did not
 +produce a clear sustained improvement, so the promoted server/guard defaults
@@ -1462,6 +1549,7 @@ index 000000000..2594c54d1
 +| ROCmFP4 FAST MMVQ/MMQ packed-byte dword load | extended the ROCmFP4 unaligned packed-byte loader to FAST `MUL_MAT`; focused ROCm FAST moved to `45.17`, `58.38`, `90.54`, and `157.83` us for `n=1/2/4/8`, and Qwen MTP improved to `33.6 tok/s` short / `28.0 tok/s` sustained on the promoted default build |
 +| MMVQ single-warp reduction bypass | skips the shared-memory reduction storage, barrier, and dead `threadIdx.y > 0` return path when a ROCmFP4 MMVQ specialization launches with one warp; focused ROCm `n=4/8` improved to FAST `87.29` / `156.52` us and dual-scale `82.81` / `141.99` us, while Qwen MTP reached `34.1 tok/s` short / `28.1 tok/s` sustained |
 +| MTP sampler top-k-10 acceptance filtering | lets `--spec-draft-p-min` operate on a real top-candidate distribution while still drafting the top sorted candidate; the 35B A3B profile with q8 main KV and q4 draft KV moved from the `89.3`-`89.5 tok/s` sustained band to `90.0 tok/s` with `--spec-draft-p-min 0.25` |
++| MTP probability-only draft sampler | the MTP draft loop only consumes the sorted top candidate and its probability, so it now fills top-10 probabilities directly and skips the unused final RNG sampler selection; the 35B A3B 262k reasoning-on guard measured `104.6 tok/s` short / `90.2 tok/s` sustained, and dense 27B held `33.9` / `28.1 tok/s` |
 +| ROCmFP4 CPY/dequant kernels | quant-to-F32 copies moved from the old `~740 us` band to about `182 us` dual-scale and `170 us` FAST |
 +| ROCmFP4 CPU finite-block quant scoring | normal GGUF quantization avoids per-value guarded decode during scale-MSE scoring after a block-level finite scan; latest guard measured dual-scale / FAST normal quant at `3844.38` / `3582.57` cycles/32 |
 +| ROCmFP4 weighted/imatrix finite scoring | FAST imatrix GGUF quantization moved from same-session pre-candidate `5258.07` to `4448.73` / `4447.32` cycles/32 on two guarded passes; dual imatrix stayed in the noisy guarded band |
@@ -2043,6 +2131,12 @@ index 000000000..2594c54d1
 +| 5 | 77.3 | rejected; too little candidate mass for the promoted `p-min 0.25` profile |
 +| 20 | 69.6 | rejected; more candidates did not improve acceptance enough to offset the path |
 +
++Accepted internal MTP sampler cleanup on the same promoted profile:
++
++| Candidate | Short decode tok/s | Sustained decode tok/s | Result |
++|---|---:|---:|---|
++| Top-10 probability-only draft sampler | 104.6 | 90.2 | promoted; avoids the unused final RNG sampler while preserving the top-candidate probability distribution used by `p-min 0.25` |
++
 +Rejected CPU/reference-path checks from the same optimization pass:
 +
 +| Promoted CPU/reference-path change | Result |
@@ -2478,10 +2572,10 @@ index 41566d41a..408670d1d 100644
      // available tensor operations:
 diff --git a/ggml/rocmfp4/README.md b/ggml/rocmfp4/README.md
 new file mode 100644
-index 000000000..ea6bee2cc
+index 000000000..99327784c
 --- /dev/null
 +++ b/ggml/rocmfp4/README.md
-@@ -0,0 +1,920 @@
+@@ -0,0 +1,926 @@
 +# ROCmFP4
 +
 +ROCmFP4 is the experimental `Q4_0_ROCMFP4` GGUF tensor type for Strix Halo.
@@ -2614,6 +2708,12 @@ index 000000000..ea6bee2cc
 +  `p-min 0.25` filter regressed it to `24.6 tok/s` sustained. The full
 +  all-regression harness can include the 35B guard with
 +  `INCLUDE_QWEN35_A3B_GUARD=1`.
++  The MTP draft sampler now uses a probability-only top-10 helper for this
++  path. The draft loop only consumes the sorted top candidate and its
++  probability, so skipping the unused final RNG sampler selection preserved the
++  output path while improving the 35B A3B guard to `104.6 tok/s` short and
++  `90.2 tok/s` sustained. The dense 27B guard remained stable at `33.9` /
++  `28.1 tok/s`.
 +  Retesting the internal MTP sampler candidate count on the 35B A3B
 +  reasoning-on profile rejected both directions around the promoted `top_k=10`
 +  setting: `top_k=5` fell to `77.3 tok/s` sustained and `top_k=20` fell to
@@ -9506,16 +9606,17 @@ index 000000000..b8775206d
 +check_max "q4_0_rocmfp4_fast imatrix" "$fast_imatrix_cycles" "$MAX_FAST_IMATRIX_CYCLES"
 diff --git a/scripts/check-rocmfp4-qwen-mtp-regression.sh b/scripts/check-rocmfp4-qwen-mtp-regression.sh
 new file mode 100755
-index 000000000..7967fb1ae
+index 000000000..afd3ac350
 --- /dev/null
 +++ b/scripts/check-rocmfp4-qwen-mtp-regression.sh
-@@ -0,0 +1,129 @@
+@@ -0,0 +1,130 @@
 +#!/usr/bin/env bash
 +set -euo pipefail
 +
 +SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 +ROOT="${ROOT:-$(cd "$SCRIPT_DIR/.." && pwd)}"
-+BIN="${BIN:-$ROOT/build-strix-rocmfp4/bin/llama-cli}"
++BUILD_DIR="${BUILD_DIR:-$ROOT/build-strix-rocmfp4}"
++BIN="${BIN:-$BUILD_DIR/bin/llama-cli}"
 +MODEL="${MODEL:-/home/caf/strix-fp4/models/Qwen3.6-27B-MTP-GGUF/Qwen3.6-27B-MTP-BF16-to-ROCmFP4-STRIX_LEAN.gguf}"
 +BACKEND="${BACKEND:-ROCm0}"
 +MIN_DECODE_TPS="${MIN_DECODE_TPS:-30.0}"
